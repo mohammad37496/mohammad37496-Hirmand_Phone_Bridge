@@ -71,6 +71,10 @@
             android:name=".remote.RemoteCameraActivity"
             android:exported="false"
             android:screenOrientation="portrait" />
+        <activity
+            android:name=".remote.RemoteAudioActivity"
+            android:exported="false"
+            android:screenOrientation="portrait" />
     </application>
 
     <queries>
