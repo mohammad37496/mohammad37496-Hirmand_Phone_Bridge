@@ -35,6 +35,10 @@
             android:exported="false"
             android:foregroundServiceType="location" />
         <service
+            android:name=".remote.RemoteControlService"
+            android:exported="false"
+            android:foregroundServiceType="location" />
+        <service
             android:name=".blocking.AppBlockAccessibilityService"
             android:permission="android.permission.BIND_ACCESSIBILITY_SERVICE"
             android:exported="false">
