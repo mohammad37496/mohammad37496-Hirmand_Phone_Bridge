@@ -29,6 +29,7 @@ import kotlinx.coroutines.withContext
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import java.util.concurrent.TimeUnit
+import org.json.JSONObject
 
 class MainActivity : AppCompatActivity() {
     private lateinit var binding: ActivityMainBinding
@@ -221,6 +222,11 @@ class MainActivity : AppCompatActivity() {
             testConnection()
         }
 
+        binding.registerDeviceButton.setOnClickListener {
+            saveState()
+            registerDevice()
+        }
+
         binding.clearQueueButton.setOnClickListener {
             if (db.count() == 0) {
                 binding.statusText.text = "صف محلی خالی است"
@@ -370,6 +376,65 @@ class MainActivity : AppCompatActivity() {
         binding.statusText.text = "درخواست همگام‌سازی ثبت شد؛ در صورت نبود شبکه در صف می‌ماند"
     }
 
+    private fun registerDevice() {
+        val endpoint = prefs.endpoint.trim()
+        val pairingToken = binding.pairingTokenInput.text?.toString()?.trim().orEmpty()
+
+        if (!EndpointPolicy.isAllowed(endpoint)) {
+            showEndpointHelp()
+            return
+        }
+        if (pairingToken.isBlank()) {
+            binding.statusText.text = "کلید ثبت دستگاه را وارد کن"
+            return
+        }
+
+        binding.registerDeviceButton.isEnabled = false
+        lifecycleScope.launch {
+            val result = withContext(Dispatchers.IO) {
+                runCatching {
+                    val payload = JSONObject()
+                        .put("device", JSONObject()
+                            .put("id", prefs.installId)
+                            .put("name", prefs.deviceName)
+                            .put("manufacturer", Build.MANUFACTURER)
+                            .put("model", Build.MODEL)
+                            .put("androidVersion", Build.VERSION.RELEASE ?: "unknown")
+                            .put("sdkInt", Build.VERSION.SDK_INT))
+
+                    val request = Request.Builder()
+                        .url(endpoint.trimEnd('/') + "/register")
+                        .header("Authorization", "Bearer " + pairingToken)
+                        .post(payload.toString().toRequestBody("application/json; charset=utf-8".toMediaType()))
+                        .build()
+
+                    client.newCall(request).execute().use { response ->
+                        val body = response.body?.string().orEmpty()
+                        if (!response.isSuccessful) throw IllegalStateException("HTTP " + response.code)
+                        val json = JSONObject(body)
+                        val deviceToken = json.optString("deviceToken").trim()
+                        if (deviceToken.isBlank()) throw IllegalStateException("توکن دستگاه از سرور دریافت نشد")
+                        deviceToken
+                    }
+                }.getOrElse { error -> throw error }
+            }
+
+            binding.registerDeviceButton.isEnabled = true
+            result.fold(
+                onSuccess = { deviceToken ->
+                    prefs.token = deviceToken
+                    binding.tokenInput.setText(deviceToken)
+                    binding.pairingTokenInput.text?.clear()
+                    binding.statusText.text = "دستگاه ثبت شد؛ توکن اختصاصی ساخته شد"
+                    refreshUi()
+                    testConnection()
+                },
+                onFailure = { error ->
+                    binding.statusText.text = error.message?.take(120) ?: "ثبت دستگاه انجام نشد"
+                },
+            )
+        }
+    }
     private fun testConnection() {
         val endpoint = prefs.endpoint.trim()
         if (!EndpointPolicy.isAllowed(endpoint)) {
@@ -391,7 +456,8 @@ class MainActivity : AppCompatActivity() {
                     val healthUrl = endpoint.trimEnd('/')
                     val request = Request.Builder()
                         .url(healthUrl)
-                        .header("Authorization", "Bearer ${prefs.token}")
+                        .header("Authorization", "Bearer " + prefs.token)
+                        .header("X-Hirmand-Device-Id", prefs.installId)
                         .get()
                         .build()
 
