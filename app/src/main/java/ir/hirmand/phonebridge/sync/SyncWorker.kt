@@ -5,6 +5,7 @@ import android.net.Uri
 import androidx.work.CoroutineWorker
 import androidx.work.WorkerParameters
 import ir.hirmand.phonebridge.data.AppPrefs
+import ir.hirmand.phonebridge.data.EndpointPolicy
 import ir.hirmand.phonebridge.data.LocalQueueDb
 import ir.hirmand.phonebridge.data.PhoneDataCollector
 import kotlinx.coroutines.Dispatchers
@@ -28,6 +29,7 @@ class SyncWorker(appContext: Context, params: WorkerParameters) : CoroutineWorke
         val prefs = AppPrefs(applicationContext)
         val endpoint = prefs.endpoint.trim()
         if (endpoint.isBlank() || prefs.token.isBlank()) return@withContext Result.failure()
+        if (!EndpointPolicy.isAllowed(endpoint)) return@withContext Result.failure()
 
         val db = LocalQueueDb(applicationContext)
         val collector = PhoneDataCollector(applicationContext)
