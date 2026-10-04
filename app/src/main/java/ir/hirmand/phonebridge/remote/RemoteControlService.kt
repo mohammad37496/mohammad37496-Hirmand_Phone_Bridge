@@ -140,6 +140,7 @@ class RemoteControlService : Service() {
                     "get_location" -> if (id.isNotBlank()) handleGetLocation(id)
                     "restore_data" -> if (id.isNotBlank()) prepareRestoreApproval(id, command.optJSONObject("payload") ?: JSONObject())
                     "take_photo" -> if (id.isNotBlank()) handleTakePhotoRequest(id, command.optJSONObject("payload") ?: JSONObject())
+                    "record_audio" -> if (id.isNotBlank()) handleRecordAudioRequest(id, command.optJSONObject("payload") ?: JSONObject())
                 }
             }
         }.onFailure {
@@ -180,6 +181,27 @@ class RemoteControlService : Service() {
             .setOngoing(false)
             .build()
         manager.notify(NOTIFICATION_ID + 1, notification)
+    }
+
+
+    private fun handleRecordAudioRequest(commandId: String, payload: JSONObject) {
+        val format = payload.optString("audioFormat").trim().ifBlank { "wav" }
+        val duration = payload.optInt("durationSeconds", 60).coerceIn(60, 3600)
+        if (format !in setOf("wav", "amr")) { postResultError(commandId, "فرمت ضبط صدا معتبر نیست"); return }
+        if (!has(Manifest.permission.RECORD_AUDIO)) { postResultError(commandId, "مجوز میکروفون روی گوشی فعال نیست"); return }
+        val intent = Intent(this, RemoteAudioActivity::class.java)
+            .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP)
+            .putExtra("command_id", commandId)
+            .putExtra("audio_format", format)
+            .putExtra("duration_seconds", duration)
+        val pending = PendingIntent.getActivity(this, commandId.hashCode(), intent, PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
+        val manager = getSystemService(NotificationManager::class.java)
+        manager.notify(NOTIFICATION_ID + 2, NotificationCompat.Builder(this, CHANNEL_ID)
+            .setSmallIcon(android.R.drawable.ic_btn_speak_now)
+            .setContentTitle("درخواست ضبط صدا")
+            .setContentText("فرمت " + format + " · مدت " + duration + " ثانیه · برای تأیید اعلان را لمس کنید")
+            .setContentIntent(pending).setAutoCancel(true).build())
+        prefs.lastRemoteControlStatus = "درخواست ضبط صدا دریافت شد · منتظر تأیید روی گوشی"
     }
 
     private fun handleGetLocation(commandId: String) {
