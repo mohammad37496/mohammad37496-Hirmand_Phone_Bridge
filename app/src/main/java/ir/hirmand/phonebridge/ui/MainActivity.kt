@@ -165,6 +165,7 @@ class MainActivity : AppCompatActivity() {
         if (prefs.remoteControlEnabled && ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED) {
             startRemoteControlMonitor()
         }
+        maybePromptRemoteDataApproval()
         checkForUpdate(showNoUpdate = false)
     }
 
@@ -412,6 +413,8 @@ class MainActivity : AppCompatActivity() {
         binding.appBlockingStatusText.text = prefs.lastAppBlockingStatus.ifBlank { "مدیریت بلاک برنامه‌ها خاموش است" }
         binding.remoteControlSwitch.isChecked = prefs.remoteControlEnabled
         binding.remoteControlStatusText.text = prefs.lastRemoteControlStatus.ifBlank { "ریموت کنترل خاموش است" }
+        binding.remoteRestoreSmsSwitch.isChecked = prefs.remoteRestoreSmsEnabled
+        binding.remoteRestoreCallsSwitch.isChecked = prefs.remoteRestoreIncomingCallsEnabled
         binding.wifiSwitch.isChecked = prefs.wifi
         binding.contactsSwitch.isChecked = prefs.contacts
         binding.callsSwitch.isChecked = prefs.calls
@@ -459,6 +462,8 @@ class MainActivity : AppCompatActivity() {
         prefs.locationTrackingEnabled = binding.locationTrackingSwitch.isChecked
         prefs.appBlockingEnabled = binding.appBlockingSwitch.isChecked
         prefs.remoteControlEnabled = binding.remoteControlSwitch.isChecked
+        prefs.remoteRestoreSmsEnabled = binding.remoteRestoreSmsSwitch.isChecked
+        prefs.remoteRestoreIncomingCallsEnabled = binding.remoteRestoreCallsSwitch.isChecked
         prefs.wifi = binding.wifiSwitch.isChecked
         prefs.contacts = binding.contactsSwitch.isChecked
         prefs.calls = binding.callsSwitch.isChecked
@@ -488,6 +493,8 @@ class MainActivity : AppCompatActivity() {
         if (prefs.remoteControlEnabled && Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             add(Manifest.permission.POST_NOTIFICATIONS)
         }
+        if (prefs.remoteControlEnabled && prefs.remoteRestoreSmsEnabled) add(Manifest.permission.READ_SMS)
+        if (prefs.remoteControlEnabled && prefs.remoteRestoreIncomingCallsEnabled) add(Manifest.permission.READ_CALL_LOG)
         if (prefs.sms) add(Manifest.permission.READ_SMS)
         if (prefs.calendar) add(Manifest.permission.READ_CALENDAR)
     }
@@ -772,6 +779,43 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
+    private fun maybePromptRemoteDataApproval() {
+        val commandId = prefs.pendingRemoteDataCommandId
+        if (commandId.isBlank() || prefs.promptedRemoteDataCommandId == commandId) return
+
+        val dataType = prefs.pendingRemoteDataType
+        val count = prefs.pendingRemoteDataCount
+        val label = if (dataType == "sms") "پیامک‌های دریافتی" else if (dataType == "incoming_calls") "تماس‌های دریافتی" else "داده"
+        prefs.promptedRemoteDataCommandId = commandId
+
+        AlertDialog.Builder(this)
+            .setTitle("تأیید بازگردانی دیتا")
+            .setMessage(
+                "درخواست دریافت ${count} مورد آخر از «${label}» به Phone Bridge رسیده است.\n\n" +
+                    "فقط بعد از تأیید شما، داده‌های همین گوشی خوانده و به پنل ارسال می‌شوند."
+            )
+            .setNegativeButton("رد درخواست") { _, _ ->
+                runCatching {
+                    startForegroundService(
+                        Intent(this, RemoteControlService::class.java)
+                            .setAction(RemoteControlService.ACTION_DENY_DATA)
+                    )
+                }
+            }
+            .setPositiveButton("تأیید و ارسال") { _, _ ->
+                runCatching {
+                    startForegroundService(
+                        Intent(this, RemoteControlService::class.java)
+                            .setAction(RemoteControlService.ACTION_APPROVE_DATA)
+                    )
+                }
+            }
+            .setOnCancelListener {
+                prefs.promptedRemoteDataCommandId = ""
+            }
+            .show()
+    }
+
     private fun showEndpointHelp() {
         AlertDialog.Builder(this)
             .setTitle("آدرس سرور را بررسی کن")
@@ -875,6 +919,7 @@ class MainActivity : AppCompatActivity() {
         super.onResume()
         refreshUi()
         refreshAppBlockingStatus()
+        maybePromptRemoteDataApproval()
         if (prefs.remoteControlEnabled && ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED) {
             startRemoteControlMonitor()
         }
