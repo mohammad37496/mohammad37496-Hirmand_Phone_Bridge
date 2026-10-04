@@ -298,9 +298,13 @@
                     <com.google.android.material.textfield.TextInputLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:hint="Endpoint سرور">
                         <com.google.android.material.textfield.TextInputEditText android:id="@+id/endpointInput" android:layout_width="match_parent" android:layout_height="wrap_content" android:inputType="textUri" android:singleLine="true" android:textDirection="ltr" />
                     </com.google.android.material.textfield.TextInputLayout>
-                    <com.google.android.material.textfield.TextInputLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="9dp" android:hint="توکن دسترسی">
+                    <com.google.android.material.textfield.TextInputLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="9dp" android:hint="توکن دستگاه">
                         <com.google.android.material.textfield.TextInputEditText android:id="@+id/tokenInput" android:layout_width="match_parent" android:layout_height="wrap_content" android:inputType="textPassword" android:singleLine="true" android:textDirection="ltr" />
                     </com.google.android.material.textfield.TextInputLayout>
+                    <com.google.android.material.textfield.TextInputLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="9dp" android:hint="کلید ثبت دستگاه (فقط برای ثبت اولیه)">
+                        <com.google.android.material.textfield.TextInputEditText android:id="@+id/pairingTokenInput" android:layout_width="match_parent" android:layout_height="wrap_content" android:inputType="textPassword" android:singleLine="true" android:textDirection="ltr" />
+                    </com.google.android.material.textfield.TextInputLayout>
+                    <com.google.android.material.button.MaterialButton android:id="@+id/registerDeviceButton" style="@style/Widget.Material3.Button.OutlinedButton" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="8dp" android:text="ثبت دستگاه و دریافت توکن اختصاصی" />
                     <com.google.android.material.textfield.TextInputLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="9dp" android:hint="نام این گوشی">
                         <com.google.android.material.textfield.TextInputEditText android:id="@+id/deviceNameInput" android:layout_width="match_parent" android:layout_height="wrap_content" android:singleLine="true" />
                     </com.google.android.material.textfield.TextInputLayout>
