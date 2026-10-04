@@ -142,7 +142,10 @@ class AppPrefs(context: Context) {
                 .remove(LEGACY_TOKEN_KEY)
                 .apply()
         }.onFailure {
-            prefs.edit().putString(LEGACY_TOKEN_KEY, value).apply()
+            prefs.edit()
+                .remove(TOKEN_KEY)
+                .putString(LEGACY_TOKEN_KEY, value)
+                .apply()
         }
     }
 
