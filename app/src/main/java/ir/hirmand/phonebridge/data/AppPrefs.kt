@@ -43,7 +43,7 @@ class AppPrefs(context: Context) {
         set(value) = prefs.edit().putBoolean("location_tracking_enabled", value).apply()
 
     var locationIntervalMinutes: Int
-        get() = prefs.getInt("location_interval_minutes", 15).coerceIn(5, 15, 30, 60)
+        get() = prefs.getInt("location_interval_minutes", 15).let { if (it in listOf(5, 15, 30, 60)) it else 15 }
         set(value) {
             val normalized = if (value in listOf(5, 15, 30, 60)) value else 15
             prefs.edit().putInt("location_interval_minutes", normalized).apply()

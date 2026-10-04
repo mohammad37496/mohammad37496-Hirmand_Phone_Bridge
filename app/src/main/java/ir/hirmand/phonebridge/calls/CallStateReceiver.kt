@@ -35,7 +35,7 @@ class CallStateReceiver : BroadcastReceiver() {
             }
             TelephonyManager.EXTRA_STATE_IDLE ->
                 Intent(context, CallRecordingService::class.java)
-                    .setAction(CallRecordingService.ACTION_STOP)
+                    .setAction(CallRecordingService.ACTION_STOP_RECORDING)
             else -> null
         } ?: return
 
