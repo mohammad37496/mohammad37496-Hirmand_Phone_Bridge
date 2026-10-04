@@ -480,7 +480,10 @@ class RemoteControlService : Service() {
                     .put("rows", chunk)
             )
             if (!ok) {
+                postDataFailure(commandId, dataType, "ارسال نتیجهٔ بازگردانی ناموفق بود")
+                prefs.clearPendingRemoteData()
                 prefs.lastRemoteControlStatus = "ارسال نتیجهٔ بازگردانی ناموفق بود"
+                updateNotification("ریموت کنترل فعال · منتظر فرمان")
                 return
             }
         }
