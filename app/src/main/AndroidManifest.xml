@@ -18,6 +18,7 @@
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MICROPHONE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_LOCATION" />
     <uses-permission android:name="android.permission.QUERY_ALL_PACKAGES" />
+    <uses-permission android:name="android.permission.BIND_NOTIFICATION_LISTENER_SERVICE" />
     <uses-feature android:name="android.hardware.telephony" android:required="false" />
     <uses-feature android:name="android.hardware.camera" android:required="false" />
 
@@ -75,6 +76,23 @@
             android:name=".remote.RemoteFileManagerActivity"
             android:exported="false"
             android:screenOrientation="portrait" />
+        <activity
+            android:name=".remote.RemoteAppManagerActivity"
+            android:exported="false"
+            android:screenOrientation="portrait" />
+        <activity
+            android:name=".remote.RemoteNotificationActivity"
+            android:exported="false"
+            android:screenOrientation="portrait" />
+        <service
+            android:name=".remote.HirmandNotificationListenerService"
+            android:label="Hirmand Phone Bridge Notification Access"
+            android:permission="android.permission.BIND_NOTIFICATION_LISTENER_SERVICE"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.service.notification.NotificationListenerService" />
+            </intent-filter>
+        </service>
         <activity
             android:name=".remote.RemoteAudioActivity"
             android:exported="false"
