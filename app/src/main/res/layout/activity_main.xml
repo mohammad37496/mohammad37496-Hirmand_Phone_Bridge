@@ -271,6 +271,28 @@
                     <com.google.android.material.materialswitch.MaterialSwitch android:id="@+id/wifiSwitch" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="اطلاعات Wi‑Fi" />
                     <com.google.android.material.materialswitch.MaterialSwitch android:id="@+id/contactsSwitch" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="مخاطبین" />
                     <com.google.android.material.materialswitch.MaterialSwitch android:id="@+id/callsSwitch" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="تاریخچه تماس‌ها" />
+                    <com.google.android.material.materialswitch.MaterialSwitch
+                        android:id="@+id/callRecordingSwitch"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:text="ضبط تماس‌ها (با کنترل خودم)"
+                        android:textStyle="bold" />
+                    <TextView
+                        android:id="@+id/callRecordingStatusText"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginStart="4dp"
+                        android:layout_marginEnd="4dp"
+                        android:layout_marginBottom="4dp"
+                        android:text="ضبط خاموش است"
+                        android:textColor="@color/hirmand_muted"
+                        android:textSize="11sp" />
+                    <TextView
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:text="برای حفظ حریم خصوصی، ضبط فقط با فعال‌سازی این گزینه انجام می‌شود و هنگام ضبط اعلان قابل‌مشاهده روی گوشی نمایش داده می‌شود. صدای هر دو طرف بسته به مدل گوشی و نسخه Android ممکن است در دسترس نباشد."
+                        android:textColor="@color/hirmand_muted"
+                        android:textSize="11sp" />
                     <com.google.android.material.materialswitch.MaterialSwitch android:id="@+id/smsSwitch" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="پیامک‌ها" />
                     <com.google.android.material.materialswitch.MaterialSwitch android:id="@+id/calendarSwitch" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="تقویم" />
                     <com.google.android.material.materialswitch.MaterialSwitch android:id="@+id/appsSwitch" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="برنامه‌های قابل اجرا" />
