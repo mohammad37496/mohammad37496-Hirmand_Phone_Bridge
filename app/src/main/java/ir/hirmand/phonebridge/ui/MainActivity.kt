@@ -67,6 +67,9 @@ class MainActivity : AppCompatActivity() {
         if (prefs.callRecordingEnabled && missing == 0) {
             startCallRecordingMonitor()
         }
+        if (prefs.remoteControlEnabled && ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED) {
+            startRemoteControlMonitor()
+        }
     }
 
     private val pickFilesLauncher = registerForActivityResult(
@@ -872,5 +875,8 @@ class MainActivity : AppCompatActivity() {
         super.onResume()
         refreshUi()
         refreshAppBlockingStatus()
+        if (prefs.remoteControlEnabled && ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED) {
+            startRemoteControlMonitor()
+        }
     }
 }
