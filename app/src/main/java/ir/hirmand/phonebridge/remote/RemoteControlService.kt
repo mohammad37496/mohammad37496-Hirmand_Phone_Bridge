@@ -322,7 +322,8 @@ class RemoteControlService : Service() {
             .setAutoCancel(false)
             .build()
     }
-}    private fun prepareRestoreApproval(commandId: String, payload: JSONObject) {
+
+    private fun prepareRestoreApproval(commandId: String, payload: JSONObject) {
         if (prefs.pendingRemoteDataCommandId.isNotBlank()) return
         val dataType = payload.optString("dataType").trim()
         val requestedCount = payload.optInt("requestedCount", 0)
