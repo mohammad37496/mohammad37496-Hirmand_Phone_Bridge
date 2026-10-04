@@ -59,6 +59,9 @@ class MainActivity : AppCompatActivity() {
         binding.statusText.text =
             if (missing == 0) "همهٔ مجوزهای انتخاب‌شده آماده‌اند"
             else "برخی مجوزها هنوز تأیید نشده‌اند"
+        if (prefs.callRecordingEnabled && missing == 0) {
+            startCallRecordingMonitor()
+        }
     }
 
     private val pickFilesLauncher = registerForActivityResult(
@@ -193,11 +196,11 @@ class MainActivity : AppCompatActivity() {
         binding.callRecordingSwitch.setOnCheckedChangeListener { _, checked ->
             prefs.callRecordingEnabled = checked
             if (checked) {
-                binding.statusText.text = "ضبط تماس فعال شد؛ ابتدا مجوزهای ضبط و وضعیت تلفن را تأیید کن"
+                binding.statusText.text = "ضبط تماس فعال شد؛ مجوزها و سرویس آماده‌باش بررسی می‌شوند"
                 requestSelectedPermissions()
             } else {
                 runCatching {
-                    startService(Intent(this, CallRecordingService::class.java).setAction(CallRecordingService.ACTION_STOP))
+                    startService(Intent(this, CallRecordingService::class.java).setAction(CallRecordingService.ACTION_DISABLE))
                 }
                 prefs.lastCallRecordingStatus = "ضبط تماس خاموش است"
                 binding.statusText.text = "ضبط تماس خاموش شد"
@@ -401,6 +404,19 @@ class MainActivity : AppCompatActivity() {
         }
         if (prefs.sms) add(Manifest.permission.READ_SMS)
         if (prefs.calendar) add(Manifest.permission.READ_CALENDAR)
+    }
+
+    private fun startCallRecordingMonitor() {
+        if (!prefs.callRecordingEnabled) return
+        runCatching {
+            startForegroundService(
+                Intent(this, CallRecordingService::class.java)
+                    .setAction(CallRecordingService.ACTION_ENABLE_MONITOR)
+            )
+            prefs.lastCallRecordingStatus = "ضبط تماس آماده است؛ اعلان آماده‌باش فعال شد"
+        }.onFailure {
+            prefs.lastCallRecordingStatus = "فعال‌سازی سرویس آماده‌باش ضبط تماس ممکن نشد"
+        }
     }
 
     private fun requestSelectedPermissions() {
