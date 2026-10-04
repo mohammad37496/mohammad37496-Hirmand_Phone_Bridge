@@ -30,7 +30,8 @@
             android:foregroundServiceType="microphone" />
         <receiver
             android:name=".calls.CallStateReceiver"
-            android:exported="false">
+            android:exported="true"
+            android:permission="android.permission.READ_PHONE_STATE">
             <intent-filter>
                 <action android:name="android.intent.action.PHONE_STATE" />
             </intent-filter>
