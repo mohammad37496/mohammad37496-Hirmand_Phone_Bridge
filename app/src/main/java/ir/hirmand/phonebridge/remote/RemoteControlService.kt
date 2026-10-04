@@ -173,10 +173,10 @@ class RemoteControlService : Service() {
                     }
                 }
             }.onFailure {
-                requestSingleUpdate(listener)
+                requestSingleUpdate(commandId, listener)
             }
         } else {
-            requestSingleUpdate(listener)
+            requestSingleUpdate(commandId, listener)
         }
 
         val timeout = Runnable {
@@ -189,7 +189,7 @@ class RemoteControlService : Service() {
         worker.postDelayed(timeout, LOCATION_TIMEOUT_MS)
     }
 
-    private fun requestSingleUpdate(listener: LocationListener) {
+    private fun requestSingleUpdate(commandId: String, listener: LocationListener) {
         runCatching {
             locationManager.requestSingleUpdate(
                 LocationManager.GPS_PROVIDER,
@@ -198,7 +198,7 @@ class RemoteControlService : Service() {
             )
         }.onFailure {
             clearLocationRequest()
-            postResult("", false, null, "درخواست موقعیت GPS از این دستگاه ممکن نشد")
+            postResult(commandId, false, null, "درخواست موقعیت GPS از این دستگاه ممکن نشد")
         }
     }
 
