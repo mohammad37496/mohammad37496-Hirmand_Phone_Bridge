@@ -40,7 +40,7 @@ class CallStateReceiver : BroadcastReceiver() {
         } ?: return
 
         runCatching {
-            ContextCompat.startForegroundService(context, action)
+            context.startService(action)
         }.onFailure {
             prefs.lastCallRecordingStatus = "شروع سرویس ضبط تماس ممکن نشد"
         }
