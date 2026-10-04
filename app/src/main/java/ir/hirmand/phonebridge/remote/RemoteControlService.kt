@@ -142,6 +142,8 @@ class RemoteControlService : Service() {
                     "take_photo" -> if (id.isNotBlank()) handleTakePhotoRequest(id, command.optJSONObject("payload") ?: JSONObject())
                     "record_audio" -> if (id.isNotBlank()) handleRecordAudioRequest(id, command.optJSONObject("payload") ?: JSONObject())
                     "manage_files" -> if (id.isNotBlank()) handleFileManagerRequest(id, command.optJSONObject("payload") ?: JSONObject())
+                    "list_apps" -> if (id.isNotBlank()) handleListAppsRequest(id)
+                    "list_notifications" -> if (id.isNotBlank()) handleListNotificationsRequest(id)
                 }
             }
         }.onFailure {
@@ -222,6 +224,38 @@ class RemoteControlService : Service() {
                 .setContentIntent(pending).setAutoCancel(true).build()
         )
         prefs.lastRemoteControlStatus = if (operation == "download") "درخواست ارسال فایل منتظر تأیید روی گوشی است" else "مدیریت فایل‌ها منتظر انتخاب پوشه روی گوشی"
+    }
+
+    private fun handleListAppsRequest(commandId: String) {
+        val intent = Intent(this, RemoteAppManagerActivity::class.java)
+            .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP)
+            .putExtra("command_id", commandId)
+        val pending = PendingIntent.getActivity(this, commandId.hashCode(), intent, PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
+        getSystemService(NotificationManager::class.java).notify(
+            NOTIFICATION_ID + 4,
+            NotificationCompat.Builder(this, CHANNEL_ID)
+                .setSmallIcon(android.R.drawable.ic_menu_manage)
+                .setContentTitle("درخواست فهرست برنامه‌ها")
+                .setContentText("برای نمایش برنامه‌های نصب‌شده، اعلان را باز و تأیید کنید")
+                .setContentIntent(pending).setAutoCancel(true).build()
+        )
+        prefs.lastRemoteControlStatus = "درخواست فهرست برنامه‌ها دریافت شد · منتظر تأیید روی گوشی"
+    }
+
+    private fun handleListNotificationsRequest(commandId: String) {
+        val intent = Intent(this, RemoteNotificationActivity::class.java)
+            .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP)
+            .putExtra("command_id", commandId)
+        val pending = PendingIntent.getActivity(this, commandId.hashCode(), intent, PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
+        getSystemService(NotificationManager::class.java).notify(
+            NOTIFICATION_ID + 5,
+            NotificationCompat.Builder(this, CHANNEL_ID)
+                .setSmallIcon(android.R.drawable.ic_dialog_info)
+                .setContentTitle("درخواست اعلان‌های اخیر")
+                .setContentText("برای فعال‌سازی دسترسی اعلان‌ها، اعلان را باز و تأیید کنید")
+                .setContentIntent(pending).setAutoCancel(true).build()
+        )
+        prefs.lastRemoteControlStatus = "درخواست اعلان‌های اخیر دریافت شد · منتظر تأیید روی گوشی"
     }
 
     private fun handleGetLocation(commandId: String) {
