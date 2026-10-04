@@ -14,6 +14,8 @@ import android.location.LocationManager
 import android.os.Build
 import android.os.IBinder
 import android.os.Looper
+import android.os.Handler
+import android.os.HandlerThread
 import androidx.core.content.ContextCompat
 import ir.hirmand.phonebridge.data.AppPrefs
 import ir.hirmand.phonebridge.sync.SignedRequest
@@ -39,6 +41,9 @@ class LocationTrackingService : Service() {
     private var listener: LocationListener? = null
     private var lastSentAt = 0L
     private var activeIntervalMs = 15 * 60_000L
+    private val handlerThread = HandlerThread("hirmand-location").apply { start() }
+    private val worker = Handler(handlerThread.looper)
+    private var configRefreshTask: Runnable? = null
 
     private val client by lazy {
         OkHttpClient.Builder()
@@ -54,6 +59,7 @@ class LocationTrackingService : Service() {
         prefs = AppPrefs(this)
         locationManager = getSystemService(LocationManager::class.java)
         createNotificationChannel()
+        scheduleConfigRefresh()
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
@@ -114,6 +120,7 @@ class LocationTrackingService : Service() {
     private fun uploadOrQueue(location: Location) {
         val point = JSONObject()
             .put("clientPointId", UUID.randomUUID().toString())
+            .put("deviceId", prefs.installId)
             .put("recordedAt", location.time.coerceAtLeast(System.currentTimeMillis()))
             .put("latitude", location.latitude)
             .put("longitude", location.longitude)
@@ -145,6 +152,49 @@ class LocationTrackingService : Service() {
         }
     }
 
+    private fun scheduleConfigRefresh() {
+        val task = object : Runnable {
+            override fun run() {
+                refreshRemoteConfig()
+                worker.postDelayed(this, 5 * 60_000L)
+            }
+        }
+        configRefreshTask = task
+        worker.post(task)
+    }
+
+    private fun refreshRemoteConfig() {
+        if (!prefs.locationTrackingEnabled || prefs.endpoint.isBlank() || prefs.token.isBlank()) return
+        runCatching {
+            val emptyBody = ByteArray(0)
+            val url = prefs.endpoint.trimEnd('/') + "/location-config?deviceId=" +
+                java.net.URLEncoder.encode(prefs.installId, "UTF-8")
+            val requestBuilder = Request.Builder()
+                .url(url)
+                .get()
+                .header("Authorization", "Bearer " + prefs.token)
+                .header("X-Hirmand-Device-Id", prefs.installId)
+            SignedRequest.addHeaders(requestBuilder, prefs.token, prefs.installId, emptyBody)
+            client.newCall(requestBuilder.build()).execute().use { response ->
+                if (!response.isSuccessful) return
+                val json = JSONObject(response.body?.string().orEmpty())
+                if (!json.optBoolean("enabled", false)) {
+                    worker.post { stopTracking(true) }
+                    return
+                }
+                val remoteInterval = json.optInt("intervalMinutes", prefs.locationIntervalMinutes)
+                if (remoteInterval in listOf(5, 15, 30, 60) && remoteInterval != prefs.locationIntervalMinutes) {
+                    prefs.locationIntervalMinutes = remoteInterval
+                    worker.post {
+                        startTracking()
+                    }
+                }
+            }
+        }.onFailure {
+            prefs.lastLocationStatus = "بررسی تنظیمات ردیابی موقعیت ناموفق بود"
+        }
+    }
+
     private fun hasLocationPermission(): Boolean =
         ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED ||
         ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_COARSE_LOCATION) == PackageManager.PERMISSION_GRANTED
@@ -167,6 +217,8 @@ class LocationTrackingService : Service() {
 
     override fun onDestroy() {
         stopLocationUpdates()
+        configRefreshTask?.let(worker::removeCallbacks)
+        handlerThread.quitSafely()
         super.onDestroy()
     }
 
