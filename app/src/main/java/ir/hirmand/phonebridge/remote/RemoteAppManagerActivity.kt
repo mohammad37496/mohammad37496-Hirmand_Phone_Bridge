@@ -37,7 +37,7 @@ class RemoteAppManagerActivity : Activity() {
     }
     private fun sendApps() {
         val pm=packageManager; val arr=JSONArray()
-        pm.getInstalledApplications(PackageManager.ApplicationInfoFlags.of(0)).asSequence()
+        pm.getInstalledApplications(0).asSequence()
             .filter{it.packageName!=packageName}
             .take(300)
             .forEach{info->
