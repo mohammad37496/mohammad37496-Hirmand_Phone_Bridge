@@ -8,6 +8,7 @@ import android.os.Environment
 import android.os.StatFs
 import androidx.work.CoroutineWorker
 import androidx.work.WorkerParameters
+import ir.hirmand.phonebridge.BuildConfig
 import ir.hirmand.phonebridge.data.AppPrefs
 import ir.hirmand.phonebridge.data.EndpointPolicy
 import ir.hirmand.phonebridge.data.LocalQueueDb
@@ -244,7 +245,9 @@ class SyncWorker(appContext: Context, params: WorkerParameters) : CoroutineWorke
                     .put("manufacturer", android.os.Build.MANUFACTURER)
                     .put("model", android.os.Build.MODEL)
                     .put("androidVersion", android.os.Build.VERSION.RELEASE ?: "unknown")
-                    .put("sdkInt", android.os.Build.VERSION.SDK_INT),
+                    .put("sdkInt", android.os.Build.VERSION.SDK_INT)
+                    .put("appVersionName", BuildConfig.VERSION_NAME)
+                    .put("appVersionCode", BuildConfig.VERSION_CODE),
             )
 
         val bodyBytes = body.toString().toByteArray(Charsets.UTF_8)
