@@ -71,6 +71,11 @@ class SyncWorker(appContext: Context, params: WorkerParameters) : CoroutineWorke
                                 prefs.lastSuccessfulSyncAt = System.currentTimeMillis()
                                 return@withContext Result.success()
                             }
+                            HeartbeatResult.NEEDS_SNAPSHOT -> {
+                                snapshot.put("snapshotHash", snapshotHash)
+                                db.enqueue(snapshot.toString())
+                                continue
+                            }
                             HeartbeatResult.AUTH_FAILURE -> return@withContext Result.failure()
                             HeartbeatResult.RETRY -> return@withContext Result.retry()
                             HeartbeatResult.PERMANENT -> return@withContext Result.failure()
@@ -150,7 +155,7 @@ class SyncWorker(appContext: Context, params: WorkerParameters) : CoroutineWorke
         }
     }
 
-    private enum class HeartbeatResult { SUCCESS, AUTH_FAILURE, RETRY, PERMANENT }
+    private enum class HeartbeatResult { SUCCESS, NEEDS_SNAPSHOT, AUTH_FAILURE, RETRY, PERMANENT }
 
     private fun snapshotHash(payload: org.json.JSONObject): String {
         val copy = org.json.JSONObject(payload.toString()).apply {
@@ -250,7 +255,16 @@ class SyncWorker(appContext: Context, params: WorkerParameters) : CoroutineWorke
         return try {
             client.newCall(request).execute().use { response ->
                 when {
-                    response.isSuccessful -> HeartbeatResult.SUCCESS
+                    response.isSuccessful -> {
+                        val responseJson = runCatching {
+                            org.json.JSONObject(response.body?.string().orEmpty())
+                        }.getOrNull()
+                        if (responseJson?.optBoolean("snapshotRequired", false) == true) {
+                            HeartbeatResult.NEEDS_SNAPSHOT
+                        } else {
+                            HeartbeatResult.SUCCESS
+                        }
+                    }
                     response.code == 401 || response.code == 403 -> HeartbeatResult.AUTH_FAILURE
                     response.code == 408 || response.code == 429 || response.code >= 500 -> HeartbeatResult.RETRY
                     response.code in 400..499 -> HeartbeatResult.PERMANENT
