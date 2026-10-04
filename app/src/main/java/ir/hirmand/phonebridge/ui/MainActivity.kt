@@ -18,6 +18,7 @@ import androidx.core.content.ContextCompat
 import androidx.lifecycle.lifecycleScope
 import androidx.work.WorkInfo
 import androidx.work.WorkManager
+import ir.hirmand.phonebridge.BuildConfig
 import ir.hirmand.phonebridge.data.AppPrefs
 import ir.hirmand.phonebridge.data.EndpointPolicy
 import ir.hirmand.phonebridge.data.LocalQueueDb
@@ -440,7 +441,9 @@ class MainActivity : AppCompatActivity() {
                             .put("manufacturer", Build.MANUFACTURER)
                             .put("model", Build.MODEL)
                             .put("androidVersion", Build.VERSION.RELEASE ?: "unknown")
-                            .put("sdkInt", Build.VERSION.SDK_INT))
+                            .put("sdkInt", Build.VERSION.SDK_INT)
+                            .put("appVersionName", BuildConfig.VERSION_NAME)
+                            .put("appVersionCode", BuildConfig.VERSION_CODE))
 
                     val request = Request.Builder()
                         .url(endpoint.trimEnd('/') + "/register")
