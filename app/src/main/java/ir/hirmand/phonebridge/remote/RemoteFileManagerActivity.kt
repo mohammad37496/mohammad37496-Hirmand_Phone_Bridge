@@ -46,7 +46,7 @@ class RemoteFileManagerActivity : Activity() {
     override fun onActivityResult(requestCode:Int,resultCode:Int,data:Intent?){
         super.onActivityResult(requestCode,resultCode,data);if(requestCode!=PICK_TREE)return
         if(resultCode!=RESULT_OK||data?.data==null){postResult(false,JSONObject(),"انتخاب پوشه لغو شد");finish();return}
-        val tree=data.data!!;runCatching{contentResolver.takePersistableUriPermission(tree,data.flags and Intent.FLAG_GRANT_READ_URI_PERMISSION)};status.text="پوشه انتخاب شد؛ در حال خواندن فهرست فایل‌ها…"
+        val tree=data.data!!;runCatching{val takeFlags=data.flags and (Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION);if(takeFlags!=0)contentResolver.takePersistableUriPermission(tree,takeFlags)};status.text="پوشه انتخاب شد؛ در حال خواندن فهرست فایل‌ها…"
         thread{val entries=enumerateTree(tree);val ok=postIndex(tree,entries);runOnUiThread{status.text=if(ok)"فهرست "+entries.size+" مورد به پنل ارسال شد." else "ارسال فهرست ناموفق بود.";postResult(ok,JSONObject().put("rootUri",tree.toString()).put("entries",entries.size),if(ok)null else "ارسال فهرست ناموفق بود");window.decorView.postDelayed({finish()},1200)}}
     }
     private fun enumerateTree(root:Uri):List<JSONObject>{
