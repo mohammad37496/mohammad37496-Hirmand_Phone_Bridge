@@ -14,7 +14,7 @@ await fs.mkdir(DATA_DIR, { recursive: true });
 await fs.mkdir(FILE_DIR, { recursive: true });
 
 function authorized(req) {
-  if (!TOKEN) return true;
+  if (!TOKEN) return false;
   return req.headers.authorization === `Bearer ${TOKEN}`;
 }
 
