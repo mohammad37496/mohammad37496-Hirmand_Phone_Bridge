@@ -112,6 +112,14 @@
                     android:textColor="@color/hirmand_primary"
                     android:textSize="12sp"
                     android:textStyle="bold" />
+                <TextView
+                    android:id="@+id/deadLetterCountBadge"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="3dp"
+                    android:text="۰ مورد متوقف‌شده"
+                    android:textColor="@color/hirmand_muted"
+                    android:textSize="11sp" />
             </LinearLayout>
         </com.google.android.material.card.MaterialCardView>
 
@@ -309,7 +317,34 @@
                         <com.google.android.material.textfield.TextInputEditText android:id="@+id/deviceNameInput" android:layout_width="match_parent" android:layout_height="wrap_content" android:singleLine="true" />
                     </com.google.android.material.textfield.TextInputLayout>
                     <com.google.android.material.button.MaterialButton android:id="@+id/saveButton" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="12dp" android:text="ذخیره تنظیمات" />
-                    <com.google.android.material.button.MaterialButton android:id="@+id/clearQueueButton" style="@style/Widget.Material3.Button.OutlinedButton" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="8dp" android:text="پاک‌کردن صف محلی" />
+                    <LinearLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="8dp"
+                        android:orientation="horizontal">
+                        <com.google.android.material.button.MaterialButton
+                            android:id="@+id/retryDeadLettersButton"
+                            style="@style/Widget.Material3.Button.OutlinedButton"
+                            android:layout_width="0dp"
+                            android:layout_height="wrap_content"
+                            android:layout_weight="1"
+                            android:text="تلاش مجدد خطاها" />
+                        <com.google.android.material.button.MaterialButton
+                            android:id="@+id/clearQueueButton"
+                            style="@style/Widget.Material3.Button.OutlinedButton"
+                            android:layout_width="0dp"
+                            android:layout_height="wrap_content"
+                            android:layout_marginStart="8dp"
+                            android:layout_weight="1"
+                            android:text="پاک‌کردن صف" />
+                    </LinearLayout>
+                    <com.google.android.material.button.MaterialButton
+                        android:id="@+id/clearDeadLettersButton"
+                        style="@style/Widget.Material3.Button.OutlinedButton"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="8dp"
+                        android:text="حذف خطاهای متوقف‌شده" />
                 </LinearLayout>
             </com.google.android.material.card.MaterialCardView>
         </LinearLayout>
