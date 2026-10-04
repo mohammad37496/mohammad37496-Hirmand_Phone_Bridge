@@ -93,6 +93,19 @@ class AppPrefs(context: Context) {
         setSelectedFiles(selectedFiles().filterNot { it.optString("uri") == uri })
     }
 
+    fun markSelectedFileBlocked(uri: String, reason: String) {
+        val updated = selectedFiles().map { file ->
+            if (file.optString("uri") == uri) {
+                JSONObject(file.toString()).apply {
+                    put("policyBlocked", true)
+                    put("policyBlockedReason", reason.take(120))
+                    put("policyBlockedAt", System.currentTimeMillis())
+                }
+            } else file
+        }
+        setSelectedFiles(updated)
+    }
+
     fun markSelectedFileUploaded(uri: String, sha256: String, fileId: String?) {
         val updated = selectedFiles().map { file ->
             if (file.optString("uri") == uri) {
