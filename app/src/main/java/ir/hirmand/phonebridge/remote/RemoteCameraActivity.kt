@@ -10,6 +10,7 @@ import android.hardware.camera2.CameraCaptureSession
 import android.hardware.camera2.CameraCharacteristics
 import android.hardware.camera2.CameraDevice
 import android.hardware.camera2.CameraManager
+import android.hardware.camera2.CaptureFailure
 import android.hardware.camera2.CaptureRequest
 import android.media.ImageReader
 import android.os.Bundle
@@ -381,7 +382,7 @@ class RemoteCameraActivity : AppCompatActivity() {
                 override fun onCaptureFailed(
                     session: CameraCaptureSession,
                     request: CaptureRequest,
-                    failure: CameraCaptureSession.CaptureFailure,
+                    failure: CaptureFailure,
                 ) {
                     mainHandler.post { cancelAndFinish("گرفتن عکس ناموفق بود") }
                 }
