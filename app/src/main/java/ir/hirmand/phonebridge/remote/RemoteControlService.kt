@@ -9,8 +9,6 @@ import android.app.Service
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.content.pm.ServiceInfo
-import android.provider.CallLog
-import android.provider.Telephony
 import android.location.Location
 import android.location.LocationListener
 import android.location.LocationManager
@@ -18,15 +16,17 @@ import android.os.Build
 import android.os.Handler
 import android.os.HandlerThread
 import android.os.IBinder
+import androidx.core.app.NotificationCompat
 import androidx.core.content.ContextCompat
 import ir.hirmand.phonebridge.data.AppPrefs
 import ir.hirmand.phonebridge.data.EndpointPolicy
 import ir.hirmand.phonebridge.sync.SignedRequest
 import ir.hirmand.phonebridge.ui.MainActivity
+import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
-import okhttp3.MediaType.Companion.toMediaType
+import org.json.JSONArray
 import org.json.JSONObject
 import java.util.concurrent.TimeUnit
 
@@ -40,6 +40,7 @@ class RemoteControlService : Service() {
         private const val NOTIFICATION_ID = 2410
         private const val POLL_MS = 5_000L
         private const val LOCATION_TIMEOUT_MS = 20_000L
+        private const val DATA_CHUNK_MAX_BYTES = 350_000
     }
 
     private lateinit var prefs: AppPrefs
@@ -53,9 +54,9 @@ class RemoteControlService : Service() {
     private val client by lazy {
         OkHttpClient.Builder()
             .connectTimeout(7, TimeUnit.SECONDS)
-            .readTimeout(10, TimeUnit.SECONDS)
-            .writeTimeout(10, TimeUnit.SECONDS)
-            .callTimeout(15, TimeUnit.SECONDS)
+            .readTimeout(15, TimeUnit.SECONDS)
+            .writeTimeout(15, TimeUnit.SECONDS)
+            .callTimeout(25, TimeUnit.SECONDS)
             .build()
     }
 
@@ -137,11 +138,48 @@ class RemoteControlService : Service() {
                 val id = command.optString("id").trim()
                 when (command.optString("action")) {
                     "get_location" -> if (id.isNotBlank()) handleGetLocation(id)
+                    "restore_data" -> if (id.isNotBlank()) prepareRestoreApproval(id, command.optJSONObject("payload") ?: JSONObject())
+                    "take_photo" -> if (id.isNotBlank()) handleTakePhotoRequest(id, command.optJSONObject("payload") ?: JSONObject())
                 }
             }
         }.onFailure {
             prefs.lastRemoteControlStatus = "ارتباط با فرمان ریموت برقرار نشد؛ دوباره تلاش می‌شود"
         }
+    }
+
+    private fun handleTakePhotoRequest(commandId: String, payload: JSONObject) {
+        val camera = payload.optString("camera").trim().ifBlank { "back" }
+        val flash = payload.optBoolean("flash", false)
+        if (camera !in setOf("front", "back")) {
+            postResultError(commandId, "دوربین انتخاب‌شده معتبر نیست")
+            return
+        }
+        val requestIntent = Intent(this, RemoteCameraActivity::class.java)
+            .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP)
+            .putExtra("command_id", commandId)
+            .putExtra("camera", camera)
+            .putExtra("flash", flash)
+
+        prefs.lastRemoteControlStatus =
+            "درخواست گرفتن عکس دریافت شد · دوربین " + if (camera == "front") "جلو" else "عقب" +
+                " · منتظر باز شدن تأیید روی گوشی"
+
+        val manager = getSystemService(NotificationManager::class.java)
+        val pending = PendingIntent.getActivity(
+            this,
+            commandId.hashCode(),
+            requestIntent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+        )
+        val notification = NotificationCompat.Builder(this, CHANNEL_ID)
+            .setSmallIcon(android.R.drawable.ic_menu_camera)
+            .setContentTitle("درخواست گرفتن عکس")
+            .setContentText("دوربین " + if (camera == "front") "جلو" else "عقب" + " · برای ادامه اعلان را لمس کنید")
+            .setContentIntent(pending)
+            .setAutoCancel(true)
+            .setOngoing(false)
+            .build()
+        manager.notify(NOTIFICATION_ID + 1, notification)
     }
 
     private fun handleGetLocation(commandId: String) {
@@ -219,20 +257,8 @@ class RemoteControlService : Service() {
 
     private fun postResult(commandId: String, success: Boolean, location: Location?, error: String?) {
         if (commandId.isBlank()) return
-        val endpoint = prefs.endpoint.trim()
-        val token = prefs.token.trim()
-        val deviceId = prefs.installId.trim()
-        if (!EndpointPolicy.isAllowed(endpoint) || token.isBlank() || deviceId.isBlank()) return
-
-        val body = JSONObject()
-            .put("deviceId", deviceId)
-            .put("commandId", commandId)
-            .put("action", "get_location")
-            .put("success", success)
-            .put("error", error ?: JSONObject.NULL)
-
-        if (success && location != null) {
-            body.put("result", JSONObject()
+        val result = if (success && location != null) {
+            JSONObject()
                 .put("latitude", location.latitude)
                 .put("longitude", location.longitude)
                 .put("accuracyMeters", if (location.hasAccuracy()) location.accuracy else JSONObject.NULL)
@@ -240,117 +266,40 @@ class RemoteControlService : Service() {
                 .put("speedMps", if (location.hasSpeed()) location.speed else JSONObject.NULL)
                 .put("bearingDegrees", if (location.hasBearing()) location.bearing else JSONObject.NULL)
                 .put("provider", location.provider ?: "gps")
-                .put("recordedAt", location.time))
+                .put("recordedAt", location.time)
         } else {
-            body.put("result", JSONObject())
+            JSONObject()
         }
-
-        val bytes = body.toString().toByteArray(Charsets.UTF_8)
-        worker.post {
-            runCatching {
-                val requestBuilder = Request.Builder()
-                    .url(endpoint.trimEnd('/') + "/remote-control/result")
-                    .post(bytes.toRequestBody("application/json; charset=utf-8".toMediaType()))
-                    .header("Authorization", "Bearer $token")
-                    .header("X-Hirmand-Device-Id", deviceId)
-                SignedRequest.addHeaders(requestBuilder, token, deviceId, bytes)
-                client.newCall(requestBuilder.build()).execute().use { response ->
-                    if (response.isSuccessful) {
-                        prefs.lastRemoteControlStatus =
-                            if (success) "آخرین فرمان ریموت با موفقیت اجرا شد" else "فرمان ریموت ناموفق بود"
-                    }
-                }
-            }
-        }
+        postJson(
+            "/remote-control/result",
+            JSONObject()
+                .put("deviceId", prefs.installId)
+                .put("commandId", commandId)
+                .put("action", "get_location")
+                .put("success", success)
+                .put("error", error ?: JSONObject.NULL)
+                .put("result", result),
+        )
     }
 
-    private fun hasFineLocation() =
+    private fun postResultError(commandId: String, error: String) {
+        postJson(
+            "/remote-control/result",
+            JSONObject()
+                .put("deviceId", prefs.installId)
+                .put("commandId", commandId)
+                .put("action", "take_photo")
+                .put("success", false)
+                .put("error", error)
+                .put("result", JSONObject()),
+        )
+    }
+
+    private fun hasFineLocation(): Boolean =
         ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED
 
-    private fun stopRemote() {
-        polling = false
-        worker.removeCallbacks(poll)
-        clearLocationRequest()
-        prefs.lastRemoteControlStatus = "ریموت کنترل خاموش است"
-        stopForeground(STOP_FOREGROUND_REMOVE)
-        stopSelf()
-    }
-
-    override fun onDestroy() {
-        polling = false
-        worker.removeCallbacks(poll)
-        clearLocationRequest()
-        thread.quitSafely()
-        super.onDestroy()
-    }
-
-    override fun onBind(intent: Intent?): IBinder? = null
-
-    private fun updateNotification(text: String, approval: Boolean = false) {
-        val manager = getSystemService(NotificationManager::class.java)
-        manager.notify(NOTIFICATION_ID, buildNotification(text, approval))
-    }
-
-    private fun createNotificationChannel() {
-        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return
-        val channel = NotificationChannel(
-            CHANNEL_ID,
-            "ریموت کنترل Phone Bridge",
-            NotificationManager.IMPORTANCE_LOW,
-        )
-        channel.description = "اعلان قابل مشاهده هنگام آماده‌بودن Phone Bridge برای فرمان ریموت"
-        channel.setShowBadge(false)
-        getSystemService(NotificationManager::class.java).createNotificationChannel(channel)
-    }
-
-    private fun buildNotification(text: String, approval: Boolean = false): Notification {
-        val openIntent = Intent(this, MainActivity::class.java)
-            .setFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_CLEAR_TOP)
-            .putExtra("remote_data_approval", true)
-        val pending = PendingIntent.getActivity(
-            this,
-            NOTIFICATION_ID,
-            openIntent,
-            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
-        )
-        return Notification.Builder(this, CHANNEL_ID)
-            .setSmallIcon(android.R.drawable.ic_menu_mylocation)
-            .setContentTitle("Phone Bridge · ریموت کنترل")
-            .setContentText(text)
-            .setContentIntent(pending)
-            .setOngoing(!approval)
-            .setAutoCancel(false)
-            .build()
-    }
-
-    private fun prepareRestoreApproval(commandId: String, payload: JSONObject) {
-        if (prefs.pendingRemoteDataCommandId.isNotBlank()) return
-        val dataType = payload.optString("dataType").trim()
-        val requestedCount = payload.optInt("requestedCount", 0)
-        val allowedCounts = setOf(15, 30, 60, 100, 250, 500, 1000, 5000, 10000)
-        if (dataType !in setOf("sms", "incoming_calls") || requestedCount !in allowedCounts) {
-            postDataFailure(commandId, dataType, "درخواست بازگردانی روی گوشی معتبر نیست")
-            return
-        }
-        val allowedByUser = when (dataType) {
-            "sms" -> prefs.sms
-            "incoming_calls" -> prefs.calls
-            else -> false
-        }
-        if (!allowedByUser) {
-            postDataFailure(commandId, dataType, "این نوع بازگردانی در خود گوشی فعال نشده است")
-            return
-        }
-
-        prefs.pendingRemoteDataCommandId = commandId
-        prefs.pendingRemoteDataType = dataType
-        prefs.pendingRemoteDataCount = requestedCount
-        prefs.promptedRemoteDataCommandId = ""
-        prefs.lastRemoteControlStatus =
-            "درخواست بازگردانی " + if (dataType == "sms") "پیامک‌های دریافتی" else "تماس‌های دریافتی" +
-            " منتظر تأیید شماست"
-        showApprovalNotification(dataType, requestedCount)
-    }
+    private fun has(permission: String): Boolean =
+        ContextCompat.checkSelfPermission(this, permission) == PackageManager.PERMISSION_GRANTED
 
     private fun approvePendingData() {
         val commandId = prefs.pendingRemoteDataCommandId
@@ -358,9 +307,7 @@ class RemoteControlService : Service() {
         val count = prefs.pendingRemoteDataCount
         if (commandId.isBlank() || count <= 0) return
         if (!prefs.remoteControlEnabled) {
-            if (commandId.isNotBlank()) {
-                postDataFailure(commandId, prefs.pendingRemoteDataType, "ریموت کنترل در این گوشی خاموش شده است")
-            }
+            postDataFailure(commandId, dataType, "ریموت کنترل در این گوشی خاموش شده است")
             prefs.clearPendingRemoteData()
             return
         }
@@ -384,6 +331,40 @@ class RemoteControlService : Service() {
             else -> emptyList()
         }
         postDataChunks(commandId, dataType, rows)
+    }
+
+    private fun prepareRestoreApproval(commandId: String, payload: JSONObject) {
+        if (prefs.pendingRemoteDataCommandId.isNotBlank()) {
+            postDataFailure(commandId, payload.optString("dataType"), "درخواست دیگری روی گوشی در انتظار تأیید است")
+            return
+        }
+        val dataType = payload.optString("dataType").trim()
+        val requestedCount = payload.optInt("requestedCount", 0)
+        val allowedCounts = setOf(15, 30, 60, 100, 250, 500, 1000, 5000, 10000)
+        if (dataType !in setOf("sms", "incoming_calls") || requestedCount !in allowedCounts) {
+            postDataFailure(commandId, dataType, "درخواست بازگردانی روی گوشی معتبر نیست")
+            return
+        }
+
+        val allowedByUser = when (dataType) {
+            "sms" -> prefs.sms
+            "incoming_calls" -> prefs.calls
+            else -> false
+        }
+        if (!allowedByUser) {
+            postDataFailure(commandId, dataType, "این نوع بازگردانی در خود گوشی فعال نشده است")
+            return
+        }
+
+        prefs.pendingRemoteDataCommandId = commandId
+        prefs.pendingRemoteDataType = dataType
+        prefs.pendingRemoteDataCount = requestedCount
+        prefs.promptedRemoteDataCommandId = ""
+        prefs.lastRemoteControlStatus =
+            "درخواست بازگردانی " +
+                if (dataType == "sms") "پیامک‌های دریافتی" else "تماس‌های دریافتی" +
+                " منتظر تأیید شماست"
+        showApprovalNotification(dataType, requestedCount)
     }
 
     private fun denyPendingData() {
@@ -478,7 +459,7 @@ class RemoteControlService : Service() {
                     .put("totalCount", rows.size)
                     .put("final", index == chunks.lastIndex)
                     .put("success", true)
-                    .put("rows", chunk)
+                    .put("rows", chunk),
             )
             if (!ok) {
                 postDataFailure(commandId, dataType, "ارسال نتیجهٔ بازگردانی ناموفق بود")
@@ -490,8 +471,9 @@ class RemoteControlService : Service() {
         }
 
         prefs.lastRemoteControlStatus =
-            "بازگردانی " + if (dataType == "sms") "پیامک" else "تماس‌های دریافتی" +
-            " کامل شد · " + rows.size + " مورد"
+            "بازگردانی " +
+                if (dataType == "sms") "پیامک" else "تماس‌های دریافتی" +
+                " کامل شد · " + rows.size + " مورد"
         prefs.clearPendingRemoteData()
         updateNotification("ریموت کنترل فعال · منتظر فرمان")
     }
@@ -506,14 +488,87 @@ class RemoteControlService : Service() {
                 .put("dataType", dataType)
                 .put("success", false)
                 .put("error", error)
-                .put("rows", JSONArray())
+                .put("rows", JSONArray()),
         )
         updateNotification("ریموت کنترل فعال · منتظر فرمان")
     }
 
     private fun showApprovalNotification(dataType: String, count: Int) {
         val label = if (dataType == "sms") "پیامک‌های دریافتی" else "تماس‌های دریافتی"
-        updateNotification("درخواست $label · $count مورد · برای تأیید، اعلان را باز کن", true)
+        updateNotification("درخواست " + label + " · " + count + " مورد · برای تأیید، اعلان را باز کن", true)
     }
 
+    private fun updateNotification(text: String, approval: Boolean = false) {
+        val manager = getSystemService(NotificationManager::class.java)
+        manager.notify(NOTIFICATION_ID, buildNotification(text, approval))
+    }
 
+    private fun createNotificationChannel() {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return
+        val channel = NotificationChannel(
+            CHANNEL_ID,
+            "ریموت کنترل Phone Bridge",
+            NotificationManager.IMPORTANCE_LOW,
+        )
+        channel.description = "اعلان قابل مشاهده هنگام آماده‌بودن Phone Bridge برای فرمان ریموت"
+        channel.setShowBadge(false)
+        getSystemService(NotificationManager::class.java).createNotificationChannel(channel)
+    }
+
+    private fun buildNotification(text: String, approval: Boolean = false): Notification {
+        val openIntent = Intent(this, MainActivity::class.java)
+            .setFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_CLEAR_TOP)
+            .putExtra("remote_data_approval", true)
+        val pending = PendingIntent.getActivity(
+            this,
+            NOTIFICATION_ID,
+            openIntent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+        )
+        return NotificationCompat.Builder(this, CHANNEL_ID)
+            .setSmallIcon(android.R.drawable.ic_menu_mylocation)
+            .setContentTitle("Phone Bridge · ریموت کنترل")
+            .setContentText(text)
+            .setContentIntent(pending)
+            .setOngoing(!approval)
+            .setAutoCancel(false)
+            .build()
+    }
+
+    private fun postJson(path: String, body: JSONObject): Boolean {
+        val endpoint = prefs.endpoint.trim()
+        val token = prefs.token.trim()
+        val deviceId = prefs.installId.trim()
+        if (!EndpointPolicy.isAllowed(endpoint) || token.isBlank() || deviceId.isBlank()) return false
+
+        val bytes = body.toString().toByteArray(Charsets.UTF_8)
+        return runCatching {
+            val requestBuilder = Request.Builder()
+                .url(endpoint.trimEnd('/') + path)
+                .post(bytes.toRequestBody("application/json; charset=utf-8".toMediaType()))
+                .header("Authorization", "Bearer $token")
+                .header("X-Hirmand-Device-Id", deviceId)
+            SignedRequest.addHeaders(requestBuilder, token, deviceId, bytes)
+            client.newCall(requestBuilder.build()).execute().use { response -> response.isSuccessful }
+        }.getOrDefault(false)
+    }
+
+    override fun onDestroy() {
+        polling = false
+        worker.removeCallbacks(poll)
+        clearLocationRequest()
+        thread.quitSafely()
+        super.onDestroy()
+    }
+
+    override fun onBind(intent: Intent?): IBinder? = null
+
+    private fun stopRemote() {
+        polling = false
+        worker.removeCallbacks(poll)
+        clearLocationRequest()
+        prefs.lastRemoteControlStatus = "ریموت کنترل خاموش است"
+        stopForeground(STOP_FOREGROUND_REMOVE)
+        stopSelf()
+    }
+}
