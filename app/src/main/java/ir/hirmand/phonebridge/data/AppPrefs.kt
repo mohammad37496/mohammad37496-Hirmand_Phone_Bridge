@@ -1,7 +1,14 @@
 package ir.hirmand.phonebridge.data
 
 import android.content.Context
+import android.security.keystore.KeyGenParameterSpec
+import android.security.keystore.KeyProperties
+import android.util.Base64
+import java.security.KeyStore
 import java.util.UUID
+import javax.crypto.Cipher
+import javax.crypto.KeyGenerator
+import javax.crypto.spec.GCMParameterSpec
 import org.json.JSONArray
 import org.json.JSONObject
 
@@ -13,8 +20,8 @@ class AppPrefs(context: Context) {
         set(value) = prefs.edit().putString("endpoint", value.trim()).apply()
 
     var token: String
-        get() = prefs.getString("token", "") ?: ""
-        set(value) = prefs.edit().putString("token", value.trim()).apply()
+        get() = readEncryptedToken()
+        set(value) = writeEncryptedToken(value.trim())
 
     var installId: String
         get() = prefs.getString("install_id", null)
@@ -108,4 +115,79 @@ class AppPrefs(context: Context) {
     var lastSuccessfulSyncAt: Long
         get() = prefs.getLong("last_successful_sync_at", 0L)
         set(value) = prefs.edit().putLong("last_successful_sync_at", value).apply()
+
+    private fun readEncryptedToken(): String {
+        val encrypted = prefs.getString(TOKEN_KEY, null)
+        if (!encrypted.isNullOrBlank()) {
+            return runCatching { decrypt(encrypted) }.getOrElse { "" }
+        }
+
+        val legacy = prefs.getString(LEGACY_TOKEN_KEY, "")?.trim().orEmpty()
+        if (legacy.isNotBlank()) {
+            writeEncryptedToken(legacy)
+            prefs.edit().remove(LEGACY_TOKEN_KEY).apply()
+        }
+        return legacy
+    }
+
+    private fun writeEncryptedToken(value: String) {
+        if (value.isBlank()) {
+            prefs.edit().remove(TOKEN_KEY).remove(LEGACY_TOKEN_KEY).apply()
+            return
+        }
+
+        runCatching {
+            prefs.edit()
+                .putString(TOKEN_KEY, encrypt(value))
+                .remove(LEGACY_TOKEN_KEY)
+                .apply()
+        }.onFailure {
+            prefs.edit().putString(LEGACY_TOKEN_KEY, value).apply()
+        }
+    }
+
+    private fun getKey(): javax.crypto.SecretKey {
+        val keyStore = KeyStore.getInstance(ANDROID_KEYSTORE).apply { load(null) }
+        (keyStore.getKey(KEY_ALIAS, null) as? javax.crypto.SecretKey)?.let { return it }
+
+        val generator = KeyGenerator.getInstance(KeyProperties.KEY_ALGORITHM_AES, ANDROID_KEYSTORE)
+        generator.init(
+            KeyGenParameterSpec.Builder(
+                KEY_ALIAS,
+                KeyProperties.PURPOSE_ENCRYPT or KeyProperties.PURPOSE_DECRYPT,
+            )
+                .setBlockModes(KeyProperties.BLOCK_MODE_GCM)
+                .setEncryptionPaddings(KeyProperties.ENCRYPTION_PADDING_NONE)
+                .setRandomizedEncryptionRequired(true)
+                .build(),
+        )
+        return generator.generateKey()
+    }
+
+    private fun encrypt(value: String): String {
+        val cipher = Cipher.getInstance(TRANSFORMATION)
+        cipher.init(Cipher.ENCRYPT_MODE, getKey())
+        val ciphertext = cipher.doFinal(value.toByteArray(Charsets.UTF_8))
+        val iv = Base64.encodeToString(cipher.iv, Base64.NO_WRAP)
+        val body = Base64.encodeToString(ciphertext, Base64.NO_WRAP)
+        return "$iv:$body"
+    }
+
+    private fun decrypt(encoded: String): String {
+        val parts = encoded.split(':', limit = 2)
+        require(parts.size == 2)
+        val iv = Base64.decode(parts[0], Base64.NO_WRAP)
+        val body = Base64.decode(parts[1], Base64.NO_WRAP)
+        val cipher = Cipher.getInstance(TRANSFORMATION)
+        cipher.init(Cipher.DECRYPT_MODE, getKey(), GCMParameterSpec(128, iv))
+        return String(cipher.doFinal(body), Charsets.UTF_8)
+    }
+
+    private companion object {
+        const val ANDROID_KEYSTORE = "AndroidKeyStore"
+        const val KEY_ALIAS = "hirmand_phone_bridge_token"
+        const val TRANSFORMATION = "AES/GCM/NoPadding"
+        const val TOKEN_KEY = "token_v2"
+        const val LEGACY_TOKEN_KEY = "token"
+    }
 }
