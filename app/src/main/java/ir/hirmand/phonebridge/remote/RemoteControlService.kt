@@ -245,18 +245,18 @@ class RemoteControlService : Service() {
         val requestedCount = payload.optInt("requestedCount", 0)
         val allowedCounts = setOf(15, 30, 60, 100, 250, 500, 1000, 5000, 10000)
         if (requestedCount !in allowedCounts) {
-            postDataFailure(commandId, "تعداد درخواستی ریموت معتبر نیست")
+            postDataFailure(commandId, dataType, "تعداد درخواستی ریموت معتبر نیست")
             return
         }
 
         when (dataType) {
             "sms" -> {
                 if (!prefs.remoteRestoreSmsEnabled) {
-                    postDataFailure(commandId, "بازگردانی پیامک‌های ریموت در خود گوشی فعال نشده است")
+                    postDataFailure(commandId, dataType, "بازگردانی پیامک‌های ریموت در خود گوشی فعال نشده است")
                     return
                 }
                 if (!has(Manifest.permission.READ_SMS)) {
-                    postDataFailure(commandId, "مجوز خواندن پیامک روی گوشی فعال نیست")
+                    postDataFailure(commandId, dataType, "مجوز خواندن پیامک روی گوشی فعال نیست")
                     return
                 }
                 prefs.lastRemoteControlStatus = "بازگردانی پیامک‌ها · در حال جمع‌آوری $requestedCount مورد آخر"
@@ -265,18 +265,18 @@ class RemoteControlService : Service() {
             }
             "incoming_calls" -> {
                 if (!prefs.remoteRestoreIncomingCallsEnabled) {
-                    postDataFailure(commandId, "بازگردانی تماس‌های دریافتی در خود گوشی فعال نشده است")
+                    postDataFailure(commandId, dataType, "بازگردانی تماس‌های دریافتی در خود گوشی فعال نشده است")
                     return
                 }
                 if (!has(Manifest.permission.READ_CALL_LOG)) {
-                    postDataFailure(commandId, "مجوز خواندن تاریخچه تماس‌ها روی گوشی فعال نیست")
+                    postDataFailure(commandId, dataType, "مجوز خواندن تاریخچه تماس‌ها روی گوشی فعال نیست")
                     return
                 }
                 prefs.lastRemoteControlStatus = "بازگردانی تماس‌های دریافتی · در حال جمع‌آوری $requestedCount مورد آخر"
                 val rows = collectRemoteIncomingCalls(requestedCount)
                 postDataChunks(commandId, dataType, rows)
             }
-            else -> postDataFailure(commandId, "نوع دیتای ریموت معتبر نیست")
+            else -> postDataFailure(commandId, dataType, "نوع دیتای ریموت معتبر نیست")
         }
     }
 
@@ -388,14 +388,14 @@ class RemoteControlService : Service() {
             " کامل شد · " + rows.size + " مورد دریافت شد"
     }
 
-    private fun postDataFailure(commandId: String, error: String) {
+    private fun postDataFailure(commandId: String, dataType: String, error: String) {
         postJson(
             path = "/remote-control/data",
             body = JSONObject()
                 .put("deviceId", prefs.installId)
                 .put("commandId", commandId)
                 .put("action", "restore_data")
-                .put("dataType", "")
+                .put("dataType", dataType)
                 .put("success", false)
                 .put("error", error)
                 .put("rows", JSONArray()),
