@@ -418,7 +418,7 @@ class MainActivity : AppCompatActivity() {
                         if (deviceToken.isBlank()) throw IllegalStateException("توکن دستگاه از سرور دریافت نشد")
                         deviceToken
                     }
-                }.getOrElse { error -> throw error }
+                }
             }
 
             binding.registerDeviceButton.isEnabled = true
