@@ -83,6 +83,35 @@
                     android:text="هنوز همگام‌سازی انجام نشده است"
                     android:textColor="@color/hirmand_muted"
                     android:textSize="12sp" />
+                <TextView
+                    android:id="@+id/updateStatusText"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="7dp"
+                    android:text="برای بررسی نسخهٔ جدید، بروزرسانی را بزن"
+                    android:textColor="@color/hirmand_muted"
+                    android:textSize="11sp" />
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="8dp"
+                    android:orientation="horizontal">
+                    <com.google.android.material.button.MaterialButton
+                        android:id="@+id/checkUpdateButton"
+                        style="@style/Widget.Material3.Button.OutlinedButton"
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:text="بررسی بروزرسانی" />
+                    <com.google.android.material.button.MaterialButton
+                        android:id="@+id/downloadUpdateButton"
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_marginStart="8dp"
+                        android:layout_weight="1"
+                        android:text="دریافت نسخه جدید"
+                        android:visibility="gone" />
+                </LinearLayout>
                 <LinearLayout
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
