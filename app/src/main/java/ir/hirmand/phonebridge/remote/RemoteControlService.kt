@@ -207,8 +207,8 @@ class RemoteControlService : Service() {
 
     private fun handleFileManagerRequest(commandId: String, payload: JSONObject) {
         val operation = payload.optString("operation").trim().ifBlank { "pick_folder" }
-        if (operation !in setOf("pick_folder", "download")) { postResultError(commandId, "عملیات مدیریت فایل معتبر نیست"); return }
-        if (operation == "download" && payload.optString("uri").isBlank()) { postResultError(commandId, "مسیر فایل ارسال نشده است"); return }
+        if (operation !in setOf("pick_folder", "download")) { postResultError(commandId, "عملیات مدیریت فایل معتبر نیست", "manage_files"); return }
+        if (operation == "download" && payload.optString("uri").isBlank()) { postResultError(commandId, "مسیر فایل ارسال نشده است", "manage_files"); return }
         val intent = Intent(this, RemoteFileManagerActivity::class.java)
             .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP)
             .putExtra("command_id", commandId).putExtra("operation", operation).putExtra("uri", payload.optString("uri"))
@@ -324,13 +324,13 @@ class RemoteControlService : Service() {
         )
     }
 
-    private fun postResultError(commandId: String, error: String) {
+    private fun postResultError(commandId: String, error: String, action: String = "take_photo") {
         postJson(
             "/remote-control/result",
             JSONObject()
                 .put("deviceId", prefs.installId)
                 .put("commandId", commandId)
-                .put("action", "take_photo")
+                .put("action", action)
                 .put("success", false)
                 .put("error", error)
                 .put("result", JSONObject()),
