@@ -1,0 +1,323 @@
+<?xml version="1.0" encoding="utf-8"?>
+<ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@color/hirmand_background"
+    android:fillViewport="true">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:padding="16dp"
+        android:layoutDirection="rtl">
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:gravity="center_vertical">
+            <LinearLayout
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:orientation="vertical">
+                <TextView
+                    android:id="@+id/titleText"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="هیرمند Bridge"
+                    android:textColor="@color/hirmand_text"
+                    android:textSize="26sp"
+                    android:textStyle="bold" />
+                <TextView
+                    android:id="@+id/subtitleText"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="3dp"
+                    android:text="اتصال امن گوشی به سامانه داخلی هیرمند"
+                    android:textColor="@color/hirmand_muted"
+                    android:textSize="13sp" />
+            </LinearLayout>
+            <TextView
+                android:id="@+id/connectionBadge"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:background="@drawable/bg_status_pill"
+                android:paddingStart="11dp"
+                android:paddingEnd="11dp"
+                android:paddingTop="7dp"
+                android:paddingBottom="7dp"
+                android:text="تنظیم نشده"
+                android:textColor="@color/hirmand_primary"
+                android:textSize="12sp"
+                android:textStyle="bold" />
+        </LinearLayout>
+
+        <com.google.android.material.card.MaterialCardView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="16dp"
+            app:cardBackgroundColor="@color/hirmand_surface"
+            app:cardCornerRadius="20dp"
+            app:strokeColor="@color/hirmand_line"
+            app:strokeWidth="1dp">
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:padding="16dp">
+                <TextView
+                    android:id="@+id/statusText"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="آمادهٔ تنظیم"
+                    android:textColor="@color/hirmand_text"
+                    android:textSize="14sp"
+                    android:textStyle="bold" />
+                <TextView
+                    android:id="@+id/lastSyncText"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="5dp"
+                    android:text="هنوز همگام‌سازی انجام نشده است"
+                    android:textColor="@color/hirmand_muted"
+                    android:textSize="12sp" />
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="12dp"
+                    android:orientation="horizontal">
+                    <com.google.android.material.button.MaterialButton
+                        android:id="@+id/syncButton"
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:text="همگام‌سازی الآن" />
+                    <com.google.android.material.button.MaterialButton
+                        android:id="@+id/testConnectionButton"
+                        style="@style/Widget.Material3.Button.OutlinedButton"
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_marginStart="8dp"
+                        android:layout_weight="1"
+                        android:text="آزمون اتصال" />
+                </LinearLayout>
+                <TextView
+                    android:id="@+id/queueCountBadge"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="8dp"
+                    android:text="۰ در صف"
+                    android:textColor="@color/hirmand_primary"
+                    android:textSize="12sp"
+                    android:textStyle="bold" />
+            </LinearLayout>
+        </com.google.android.material.card.MaterialCardView>
+
+        <com.google.android.material.button.MaterialButtonToggleGroup
+            android:id="@+id/tabGroup"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="14dp"
+            app:singleSelection="true"
+            app:selectionRequired="true">
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/tabDashboard"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:text="داشبورد" />
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/tabModules"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:text="ماژول‌ها" />
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/tabSettings"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:text="تنظیمات" />
+        </com.google.android.material.button.MaterialButtonToggleGroup>
+
+        <LinearLayout
+            android:id="@+id/dashboardSection"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical">
+
+            <com.google.android.material.card.MaterialCardView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="14dp"
+                app:cardBackgroundColor="@color/hirmand_surface"
+                app:cardCornerRadius="18dp">
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="vertical"
+                    android:padding="15dp">
+                    <TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:text="دستگاه" android:textColor="@color/hirmand_muted" android:textSize="11sp" />
+                    <TextView android:id="@+id/deviceSummaryText" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="4dp" android:text="گوشی من" android:textColor="@color/hirmand_text" android:textSize="18sp" android:textStyle="bold" />
+                    <TextView android:id="@+id/deviceDetailsText" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="4dp" android:text="Android" android:textColor="@color/hirmand_muted" android:textSize="12sp" />
+                </LinearLayout>
+            </com.google.android.material.card.MaterialCardView>
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="12dp"
+                android:orientation="horizontal">
+                <com.google.android.material.card.MaterialCardView android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" app:cardBackgroundColor="@color/hirmand_surface" app:cardCornerRadius="16dp">
+                    <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="vertical" android:padding="13dp">
+                        <TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:text="ماژول فعال" android:textColor="@color/hirmand_muted" android:textSize="11sp" />
+                        <TextView android:id="@+id/activeModulesText" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="4dp" android:text="۰" android:textColor="@color/hirmand_text" android:textSize="20sp" android:textStyle="bold" />
+                    </LinearLayout>
+                </com.google.android.material.card.MaterialCardView>
+                <com.google.android.material.card.MaterialCardView android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:layout_marginStart="8dp" app:cardBackgroundColor="@color/hirmand_surface" app:cardCornerRadius="16dp">
+                    <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="vertical" android:padding="13dp">
+                        <TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:text="مجوز آماده" android:textColor="@color/hirmand_muted" android:textSize="11sp" />
+                        <TextView android:id="@+id/permissionsReadyText" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="4dp" android:text="۰ / ۰" android:textColor="@color/hirmand_text" android:textSize="20sp" android:textStyle="bold" />
+                    </LinearLayout>
+                </com.google.android.material.card.MaterialCardView>
+            </LinearLayout>
+
+            <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="8dp" android:orientation="horizontal">
+                <com.google.android.material.card.MaterialCardView android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" app:cardBackgroundColor="@color/hirmand_surface" app:cardCornerRadius="16dp">
+                    <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="vertical" android:padding="13dp">
+                        <TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:text="صف محلی" android:textColor="@color/hirmand_muted" android:textSize="11sp" />
+                        <TextView android:id="@+id/queueMetricText" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="4dp" android:text="۰" android:textColor="@color/hirmand_text" android:textSize="20sp" android:textStyle="bold" />
+                    </LinearLayout>
+                </com.google.android.material.card.MaterialCardView>
+                <com.google.android.material.card.MaterialCardView android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:layout_marginStart="8dp" app:cardBackgroundColor="@color/hirmand_surface" app:cardCornerRadius="16dp">
+                    <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="vertical" android:padding="13dp">
+                        <TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:text="باتری" android:textColor="@color/hirmand_muted" android:textSize="11sp" />
+                        <TextView android:id="@+id/batteryText" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="4dp" android:text="—" android:textColor="@color/hirmand_text" android:textSize="20sp" android:textStyle="bold" />
+                    </LinearLayout>
+                </com.google.android.material.card.MaterialCardView>
+            </LinearLayout>
+
+            <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="8dp" android:orientation="horizontal">
+                <com.google.android.material.card.MaterialCardView android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" app:cardBackgroundColor="@color/hirmand_surface" app:cardCornerRadius="16dp">
+                    <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="vertical" android:padding="13dp">
+                        <TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:text="RAM" android:textColor="@color/hirmand_muted" android:textSize="11sp" />
+                        <TextView android:id="@+id/ramText" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="4dp" android:text="—" android:textColor="@color/hirmand_text" android:textSize="20sp" android:textStyle="bold" />
+                    </LinearLayout>
+                </com.google.android.material.card.MaterialCardView>
+                <com.google.android.material.card.MaterialCardView android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:layout_marginStart="8dp" app:cardBackgroundColor="@color/hirmand_surface" app:cardCornerRadius="16dp">
+                    <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="vertical" android:padding="13dp">
+                        <TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:text="فضای آزاد" android:textColor="@color/hirmand_muted" android:textSize="11sp" />
+                        <TextView android:id="@+id/storageText" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="4dp" android:text="—" android:textColor="@color/hirmand_text" android:textSize="20sp" android:textStyle="bold" />
+                    </LinearLayout>
+                </com.google.android.material.card.MaterialCardView>
+            </LinearLayout>
+        </LinearLayout>
+
+        <LinearLayout
+            android:id="@+id/modulesSection"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:visibility="gone">
+
+            <com.google.android.material.card.MaterialCardView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="14dp"
+                app:cardBackgroundColor="@color/hirmand_surface"
+                app:cardCornerRadius="18dp">
+                <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="vertical" android:padding="14dp">
+                    <TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:text="ماژول‌های داده" android:textColor="@color/hirmand_text" android:textSize="17sp" android:textStyle="bold" />
+                    <com.google.android.material.materialswitch.MaterialSwitch android:id="@+id/locationSwitch" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="8dp" android:text="موقعیت مکانی" />
+                    <com.google.android.material.materialswitch.MaterialSwitch android:id="@+id/wifiSwitch" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="اطلاعات Wi‑Fi" />
+                    <com.google.android.material.materialswitch.MaterialSwitch android:id="@+id/contactsSwitch" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="مخاطبین" />
+                    <com.google.android.material.materialswitch.MaterialSwitch android:id="@+id/callsSwitch" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="تاریخچه تماس‌ها" />
+                    <com.google.android.material.materialswitch.MaterialSwitch android:id="@+id/smsSwitch" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="پیامک‌ها" />
+                    <com.google.android.material.materialswitch.MaterialSwitch android:id="@+id/calendarSwitch" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="تقویم" />
+                    <com.google.android.material.materialswitch.MaterialSwitch android:id="@+id/appsSwitch" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="برنامه‌های قابل اجرا" />
+                    <com.google.android.material.button.MaterialButton
+                        android:id="@+id/requestPermissionsButton"
+                        style="@style/Widget.Material3.Button.OutlinedButton"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="10dp"
+                        android:text="بررسی و درخواست مجوزهای انتخاب‌شده" />
+                </LinearLayout>
+            </com.google.android.material.card.MaterialCardView>
+
+            <com.google.android.material.card.MaterialCardView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="12dp"
+                app:cardBackgroundColor="@color/hirmand_surface"
+                app:cardCornerRadius="18dp">
+                <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="vertical" android:padding="14dp">
+                    <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:gravity="center_vertical">
+                        <LinearLayout android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:orientation="vertical">
+                            <TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:text="فایل و رسانهٔ انتخابی" android:textColor="@color/hirmand_text" android:textSize="15sp" android:textStyle="bold" />
+                            <TextView android:id="@+id/selectedFilesCountText" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="3dp" android:text="۰ مورد انتخاب‌شده" android:textColor="@color/hirmand_muted" android:textSize="12sp" />
+                        </LinearLayout>
+                        <com.google.android.material.button.MaterialButton android:id="@+id/pickFilesButton" style="@style/Widget.Material3.Button.OutlinedButton" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="انتخاب" />
+                    </LinearLayout>
+                    <TextView android:id="@+id/selectedFilesText" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="9dp" android:text="هنوز فایلی انتخاب نشده است" android:textColor="@color/hirmand_muted" android:textSize="12sp" android:lineSpacingExtra="4dp" />
+                    <TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="8dp" android:text="فایل‌های انتخابی در زمان Sync به‌صورت باینری ارسال می‌شوند؛ سقف هر فایل ۸ مگابایت است." android:textColor="@color/hirmand_muted" android:textSize="11sp" />
+                </LinearLayout>
+            </com.google.android.material.card.MaterialCardView>
+
+            <com.google.android.material.card.MaterialCardView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="12dp"
+                app:cardBackgroundColor="@color/hirmand_surface"
+                app:cardCornerRadius="18dp">
+                <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="vertical" android:padding="14dp">
+                    <com.google.android.material.materialswitch.MaterialSwitch android:id="@+id/autoSyncSwitch" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="همگام‌سازی خودکار هر ۱۵ دقیقه" android:textStyle="bold" />
+                    <TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="3dp" android:text="اجرای خودکار فقط روی شبکهٔ غیرمحدود (معمولاً Wi‑Fi) انجام می‌شود." android:textColor="@color/hirmand_muted" android:textSize="11sp" />
+                </LinearLayout>
+            </com.google.android.material.card.MaterialCardView>
+        </LinearLayout>
+
+        <LinearLayout
+            android:id="@+id/settingsSection"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:visibility="gone">
+
+            <TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="14dp" android:text="اتصال و مشخصات دستگاه" android:textColor="@color/hirmand_text" android:textSize="17sp" android:textStyle="bold" />
+
+            <com.google.android.material.card.MaterialCardView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="12dp"
+                app:cardBackgroundColor="@color/hirmand_surface"
+                app:cardCornerRadius="18dp">
+                <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="vertical" android:padding="14dp">
+                    <com.google.android.material.textfield.TextInputLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:hint="Endpoint سرور">
+                        <com.google.android.material.textfield.TextInputEditText android:id="@+id/endpointInput" android:layout_width="match_parent" android:layout_height="wrap_content" android:inputType="textUri" android:singleLine="true" android:textDirection="ltr" />
+                    </com.google.android.material.textfield.TextInputLayout>
+                    <com.google.android.material.textfield.TextInputLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="9dp" android:hint="توکن دسترسی">
+                        <com.google.android.material.textfield.TextInputEditText android:id="@+id/tokenInput" android:layout_width="match_parent" android:layout_height="wrap_content" android:inputType="textPassword" android:singleLine="true" android:textDirection="ltr" />
+                    </com.google.android.material.textfield.TextInputLayout>
+                    <com.google.android.material.textfield.TextInputLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="9dp" android:hint="نام این گوشی">
+                        <com.google.android.material.textfield.TextInputEditText android:id="@+id/deviceNameInput" android:layout_width="match_parent" android:layout_height="wrap_content" android:singleLine="true" />
+                    </com.google.android.material.textfield.TextInputLayout>
+                    <com.google.android.material.button.MaterialButton android:id="@+id/saveButton" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="12dp" android:text="ذخیره تنظیمات" />
+                    <com.google.android.material.button.MaterialButton android:id="@+id/clearQueueButton" style="@style/Widget.Material3.Button.OutlinedButton" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="8dp" android:text="پاک‌کردن صف محلی" />
+                </LinearLayout>
+            </com.google.android.material.card.MaterialCardView>
+        </LinearLayout>
+
+        <TextView
+            android:id="@+id/privacyText"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="16dp"
+            android:padding="4dp"
+            android:text="کنترل داده دست خودت است: هیچ ماژول حساسی بدون انتخاب تو فعال نمی‌شود و هیچ فرمان مخفی یا کنترل از راه دور در اپ وجود ندارد."
+            android:textColor="@color/hirmand_muted"
+            android:textSize="11sp" />
+    </LinearLayout>
+</ScrollView>
