@@ -289,6 +289,31 @@ class SyncWorker(appContext: Context, params: WorkerParameters) : CoroutineWorke
 
     private class PermanentFileUploadException(message: String) : Exception(message)
 
+    private suspend fun uploadPendingLocations(prefs: AppPrefs, endpoint: String) {
+        val points = prefs.pendingLocations().take(100)
+        if (points.isEmpty()) return
+        val uploadEndpoint = endpoint.trimEnd('/') + "/location"
+        for (point in points) {
+            val clientPointId = point.optString("clientPointId")
+            if (clientPointId.isBlank()) continue
+            val bodyBytes = point.toString().toByteArray(Charsets.UTF_8)
+            val requestBuilder = Request.Builder()
+                .url(uploadEndpoint)
+                .post(bodyBytes.toRequestBody("application/json; charset=utf-8".toMediaType()))
+                .header("Authorization", "Bearer " + prefs.token)
+                .header("X-Hirmand-Device-Id", prefs.installId)
+            SignedRequest.addHeaders(requestBuilder, prefs.token, prefs.installId, bodyBytes)
+            client.newCall(requestBuilder.build()).execute().use { response ->
+                when {
+                    response.isSuccessful -> prefs.removePendingLocation(clientPointId)
+                    response.code == 401 || response.code == 403 -> return
+                    response.code == 408 || response.code == 429 || response.code >= 500 ->
+                        throw IllegalStateException("temporary-location-upload-" + response.code)
+                    response.code in 400..499 -> prefs.removePendingLocation(clientPointId)
+                }
+            }
+        }
+    }
     private suspend fun uploadCallRecordings(prefs: AppPrefs, endpoint: String) {
         val uploadEndpoint = endpoint.trimEnd('/') + "/call-recordings"
         for (recording in prefs.pendingCallRecordings()) {
