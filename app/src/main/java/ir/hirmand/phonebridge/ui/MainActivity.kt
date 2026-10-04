@@ -19,6 +19,7 @@ import androidx.lifecycle.lifecycleScope
 import androidx.work.WorkInfo
 import androidx.work.WorkManager
 import ir.hirmand.phonebridge.BuildConfig
+import ir.hirmand.phonebridge.calls.CallRecordingService
 import ir.hirmand.phonebridge.data.AppPrefs
 import ir.hirmand.phonebridge.data.EndpointPolicy
 import ir.hirmand.phonebridge.data.LocalQueueDb
@@ -189,6 +190,21 @@ class MainActivity : AppCompatActivity() {
         )
         switches.forEach { it.setOnCheckedChangeListener { _, _ -> refreshUi() } }
 
+        binding.callRecordingSwitch.setOnCheckedChangeListener { _, checked ->
+            prefs.callRecordingEnabled = checked
+            if (checked) {
+                binding.statusText.text = "ضبط تماس فعال شد؛ ابتدا مجوزهای ضبط و وضعیت تلفن را تأیید کن"
+                requestSelectedPermissions()
+            } else {
+                runCatching {
+                    startService(Intent(this, CallRecordingService::class.java).setAction(CallRecordingService.ACTION_STOP))
+                }
+                prefs.lastCallRecordingStatus = "ضبط تماس خاموش است"
+                binding.statusText.text = "ضبط تماس خاموش شد"
+            }
+            refreshUi()
+        }
+
         binding.autoSyncSwitch.setOnCheckedChangeListener { _, checked ->
             prefs.autoSync = checked
             if (checked) {
@@ -322,7 +338,9 @@ class MainActivity : AppCompatActivity() {
         binding.smsSwitch.isChecked = prefs.sms
         binding.calendarSwitch.isChecked = prefs.calendar
         binding.appsSwitch.isChecked = prefs.apps
+        binding.callRecordingSwitch.isChecked = prefs.callRecordingEnabled
         binding.autoSyncSwitch.isChecked = prefs.autoSync
+        binding.callRecordingStatusText.text = prefs.lastCallRecordingStatus.ifBlank { "ضبط خاموش است" }
         renderSelectedFiles()
         binding.deviceSummaryText.text = prefs.deviceName
         binding.deviceDetailsText.text =
@@ -364,13 +382,20 @@ class MainActivity : AppCompatActivity() {
         prefs.sms = binding.smsSwitch.isChecked
         prefs.calendar = binding.calendarSwitch.isChecked
         prefs.apps = binding.appsSwitch.isChecked
+        prefs.callRecordingEnabled = binding.callRecordingSwitch.isChecked
         prefs.autoSync = binding.autoSyncSwitch.isChecked
     }
 
     private fun selectedPermissions(): List<String> = buildList {
         if (prefs.location) add(Manifest.permission.ACCESS_COARSE_LOCATION)
         if (prefs.contacts) add(Manifest.permission.READ_CONTACTS)
-        if (prefs.calls) add(Manifest.permission.READ_CALL_LOG)
+        if (prefs.calls) {
+            add(Manifest.permission.READ_CALL_LOG)
+        }
+        if (prefs.callRecordingEnabled) {
+            add(Manifest.permission.READ_PHONE_STATE)
+            add(Manifest.permission.RECORD_AUDIO)
+        }
         if (prefs.sms) add(Manifest.permission.READ_SMS)
         if (prefs.calendar) add(Manifest.permission.READ_CALENDAR)
     }
@@ -389,6 +414,7 @@ class MainActivity : AppCompatActivity() {
             if (prefs.location) add("موقعیت")
             if (prefs.contacts) add("مخاطبین")
             if (prefs.calls) add("تاریخچه تماس‌ها")
+            if (prefs.callRecordingEnabled) add("ضبط تماس و وضعیت تلفن")
             if (prefs.sms) add("پیامک‌ها")
             if (prefs.calendar) add("تقویم")
         }
@@ -398,7 +424,8 @@ class MainActivity : AppCompatActivity() {
             .setMessage(
                 "اپ فقط برای این موارد مجوز می‌خواهد:\n\n" +
                     "${labels.joinToString("، ")}\n\n" +
-                    "این دسترسی‌ها فقط برای ماژول‌هایی استفاده می‌شوند که خودت روشن کرده‌ای."
+                    "این دسترسی‌ها فقط برای ماژول‌هایی استفاده می‌شوند که خودت روشن کرده‌ای.\n\n" +
+                    "ضبط تماس فقط وقتی کلید ضبط روشن باشد فعال می‌شود و هنگام ضبط اعلان قابل‌مشاهده نمایش داده می‌شود."
             )
             .setNegativeButton("انصراف", null)
             .setPositiveButton("ادامه") { _, _ ->
@@ -630,6 +657,7 @@ class MainActivity : AppCompatActivity() {
             prefs.sms,
             prefs.calendar,
             prefs.apps,
+            prefs.callRecordingEnabled,
         ).count { it }
 
         val permissions = selectedPermissions().count {
@@ -649,6 +677,11 @@ class MainActivity : AppCompatActivity() {
 
         val ready = EndpointPolicy.isAllowed(prefs.endpoint) && prefs.token.isNotBlank()
         binding.connectionBadge.text = if (ready) "آماده" else "تنظیم نشده"
+
+        binding.callRecordingStatusText.text =
+            prefs.lastCallRecordingStatus.ifBlank {
+                if (prefs.callRecordingEnabled) "ضبط تماس آمادهٔ استفاده است" else "ضبط خاموش است"
+            }
 
         binding.lastSyncText.text = when {
             queued > 0 && deadLetters > 0 ->
