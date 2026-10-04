@@ -116,6 +116,10 @@ class AppPrefs(context: Context) {
         get() = prefs.getLong("last_successful_sync_at", 0L)
         set(value) = prefs.edit().putLong("last_successful_sync_at", value).apply()
 
+    var lastSnapshotHash: String
+        get() = prefs.getString("last_snapshot_hash", "") ?: ""
+        set(value) = prefs.edit().putString("last_snapshot_hash", value.trim()).apply()
+
     private fun readEncryptedToken(): String {
         val encrypted = prefs.getString(TOKEN_KEY, null)
         if (!encrypted.isNullOrBlank()) {
