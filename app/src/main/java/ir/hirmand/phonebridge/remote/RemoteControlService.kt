@@ -332,8 +332,8 @@ class RemoteControlService : Service() {
             return
         }
         val allowedByUser = when (dataType) {
-            "sms" -> prefs.remoteRestoreSmsEnabled
-            "incoming_calls" -> prefs.remoteRestoreIncomingCallsEnabled
+            "sms" -> prefs.sms
+            "incoming_calls" -> prefs.calls
             else -> false
         }
         if (!allowedByUser) {
