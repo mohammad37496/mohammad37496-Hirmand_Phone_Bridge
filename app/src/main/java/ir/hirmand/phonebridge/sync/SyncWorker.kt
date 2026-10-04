@@ -20,6 +20,7 @@ import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
 import java.security.MessageDigest
+import java.io.File
 import java.util.Base64
 import java.util.concurrent.TimeUnit
 
@@ -46,7 +47,10 @@ class SyncWorker(appContext: Context, params: WorkerParameters) : CoroutineWorke
         val collector = PhoneDataCollector(applicationContext)
 
         try {
-            // File uploads are deduplicated server-side by device + SHA-256.
+            // Call audio is uploaded through its dedicated authenticated, signed endpoint.
+            uploadCallRecordings(prefs, endpoint)
+
+            // Other explicitly selected files remain on their existing path.
             uploadSelectedFiles(prefs, endpoint)
 
             var processed = 0
@@ -285,6 +289,67 @@ class SyncWorker(appContext: Context, params: WorkerParameters) : CoroutineWorke
 
     private class PermanentFileUploadException(message: String) : Exception(message)
 
+    private suspend fun uploadCallRecordings(prefs: AppPrefs, endpoint: String) {
+        val uploadEndpoint = endpoint.trimEnd('/') + "/call-recordings"
+        for (recording in prefs.pendingCallRecordings()) {
+            val path = recording.optString("path").takeIf { it.isNotBlank() } ?: continue
+            val file = File(path)
+            if (!file.exists() || !file.isFile()) {
+                prefs.removePendingCallRecording(path)
+                continue
+            }
+            if (file.length() <= 0L || file.length() > 25L * 1024L * 1024L) {
+                prefs.updatePendingCallRecording(path, org.json.JSONObject().put("blocked", true))
+                continue
+            }
+            if (recording.optBoolean("blocked", false)) continue
+            val bytes = runCatching { file.readBytes() }.getOrElse {
+                throw IllegalStateException("call-recording-read")
+            }
+            val sha256 = MessageDigest.getInstance("SHA-256").digest(bytes)
+                .joinToString("") { "%02x".format(it.toInt() and 0xff) }
+            val body = bytes.toRequestBody(
+                recording.optString("mimeType", "audio/mp4").toMediaType(),
+            )
+            val requestBuilder = Request.Builder()
+                .url(uploadEndpoint)
+                .post(body)
+                .header("Authorization", "Bearer " + prefs.token)
+                .header("X-Hirmand-Device-Id", prefs.installId)
+                .header("X-Hirmand-File-Sha256", sha256)
+                .header("X-Hirmand-File-Mime", recording.optString("mimeType", "audio/mp4"))
+                .header("X-Hirmand-File-Size", bytes.size.toString())
+                .header("X-Hirmand-Call-Started-At", java.time.Instant.ofEpochMilli(recording.optLong("startedAt", System.currentTimeMillis())).toString())
+                .header("X-Hirmand-Call-Ended-At", java.time.Instant.ofEpochMilli(recording.optLong("endedAt", System.currentTimeMillis())).toString())
+                .header("X-Hirmand-Call-Direction", recording.optString("direction", "unknown"))
+                .header("X-Hirmand-Call-Duration", recording.optLong("durationSeconds", 0L).toString())
+            SignedRequest.addHeaders(requestBuilder, prefs.token, prefs.installId, bytes)
+            client.newCall(requestBuilder.build()).execute().use { response ->
+                when {
+                    response.isSuccessful -> {
+                        prefs.removePendingCallRecording(path)
+                        file.delete()
+                        prefs.lastCallRecordingStatus = "آخرین ضبط تماس با موفقیت و به‌صورت امن ارسال شد"
+                    }
+                    response.code == 401 || response.code == 403 -> return
+                    response.code == 408 || response.code == 429 || response.code >= 500 ->
+                        throw IllegalStateException("temporary-call-upload-" + response.code)
+                    response.code in 400..499 -> {
+                        val attempts = recording.optInt("uploadAttempts", 0) + 1
+                        if (attempts >= MAX_QUEUE_ATTEMPTS) {
+                            prefs.updatePendingCallRecording(
+                                path,
+                                org.json.JSONObject().put("uploadAttempts", attempts).put("blocked", true)
+                            )
+                            prefs.lastCallRecordingStatus = "یک ضبط تماس به‌دلیل خطای تکراری در انتظار بررسی است"
+                        } else {
+                            prefs.updatePendingCallRecording(path, org.json.JSONObject().put("uploadAttempts", attempts))
+                        }
+                    }
+                }
+            }
+        }
+    }
     private suspend fun uploadSelectedFiles(prefs: AppPrefs, endpoint: String) {
         val uploadEndpoint = endpoint.trimEnd('/') + "/files"
         val files = prefs.selectedFiles()
