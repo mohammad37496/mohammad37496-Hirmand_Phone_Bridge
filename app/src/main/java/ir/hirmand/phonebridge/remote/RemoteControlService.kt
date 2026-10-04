@@ -1,5 +1,6 @@
 package ir.hirmand.phonebridge.remote
 
+import android.annotation.SuppressLint
 import android.Manifest
 import android.app.Notification
 import android.app.NotificationChannel
@@ -260,6 +261,7 @@ class RemoteControlService : Service() {
         prefs.lastRemoteControlStatus = "درخواست اعلان‌های اخیر دریافت شد · منتظر تأیید روی گوشی"
     }
 
+    @SuppressLint("MissingPermission")
     private fun handleGetLocation(commandId: String) {
         if (!hasFineLocation()) {
             postResult(commandId, false, null, "مجوز دقیق GPS در دسترس نیست")
@@ -313,6 +315,7 @@ class RemoteControlService : Service() {
         worker.postDelayed(timeout, LOCATION_TIMEOUT_MS)
     }
 
+    @SuppressLint("MissingPermission")
     private fun requestSingleUpdate(listener: LocationListener) {
         runCatching {
             locationManager.requestSingleUpdate(
