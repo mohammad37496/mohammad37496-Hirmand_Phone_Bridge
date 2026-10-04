@@ -19,8 +19,10 @@ import java.io.File
 
 class CallRecordingService : Service() {
     companion object {
+        const val ACTION_ENABLE_MONITOR = "ir.hirmand.phonebridge.calls.ENABLE_MONITOR"
         const val ACTION_START = "ir.hirmand.phonebridge.calls.START_RECORDING"
-        const val ACTION_STOP = "ir.hirmand.phonebridge.calls.STOP_RECORDING"
+        const val ACTION_STOP_RECORDING = "ir.hirmand.phonebridge.calls.STOP_RECORDING"
+        const val ACTION_DISABLE = "ir.hirmand.phonebridge.calls.DISABLE_RECORDING"
         const val EXTRA_DIRECTION = "direction"
         private const val CHANNEL_ID = "call_recording"
         private const val NOTIFICATION_ID = 2407
@@ -39,10 +41,34 @@ class CallRecordingService : Service() {
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         when (intent?.action) {
+            ACTION_ENABLE_MONITOR -> startMonitoring()
             ACTION_START -> startRecording(intent.getStringExtra(EXTRA_DIRECTION) ?: "unknown")
-            ACTION_STOP -> stopRecording()
+            ACTION_STOP_RECORDING -> stopRecording()
+            ACTION_DISABLE -> {
+                stopRecording()
+                stopSelf()
+            }
         }
-        return START_NOT_STICKY
+        return START_STICKY
+    }
+
+    private fun startMonitoring() {
+        val prefs = AppPrefs(this)
+        if (!prefs.callRecordingEnabled) {
+            stopSelf()
+            return
+        }
+        val notification = buildNotification("ضبط تماس آماده است؛ منتظر شروع تماس")
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            startForeground(
+                NOTIFICATION_ID,
+                notification,
+                ServiceInfo.FOREGROUND_SERVICE_TYPE_MICROPHONE,
+            )
+        } else {
+            startForeground(NOTIFICATION_ID, notification)
+        }
+        prefs.lastCallRecordingStatus = "ضبط تماس آماده است؛ اعلان فعال روی گوشی نمایش داده می‌شود"
     }
 
     private fun startRecording(requestedDirection: String) {
