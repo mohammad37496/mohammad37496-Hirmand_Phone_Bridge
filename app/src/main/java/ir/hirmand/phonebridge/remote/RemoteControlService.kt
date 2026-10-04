@@ -141,6 +141,7 @@ class RemoteControlService : Service() {
                     "restore_data" -> if (id.isNotBlank()) prepareRestoreApproval(id, command.optJSONObject("payload") ?: JSONObject())
                     "take_photo" -> if (id.isNotBlank()) handleTakePhotoRequest(id, command.optJSONObject("payload") ?: JSONObject())
                     "record_audio" -> if (id.isNotBlank()) handleRecordAudioRequest(id, command.optJSONObject("payload") ?: JSONObject())
+                    "manage_files" -> if (id.isNotBlank()) handleFileManagerRequest(id, command.optJSONObject("payload") ?: JSONObject())
                 }
             }
         }.onFailure {
@@ -202,6 +203,25 @@ class RemoteControlService : Service() {
             .setContentText("فرمت " + format + " · مدت " + duration + " ثانیه · برای تأیید اعلان را لمس کنید")
             .setContentIntent(pending).setAutoCancel(true).build())
         prefs.lastRemoteControlStatus = "درخواست ضبط صدا دریافت شد · منتظر تأیید روی گوشی"
+    }
+
+    private fun handleFileManagerRequest(commandId: String, payload: JSONObject) {
+        val operation = payload.optString("operation").trim().ifBlank { "pick_folder" }
+        if (operation !in setOf("pick_folder", "download")) { postResultError(commandId, "عملیات مدیریت فایل معتبر نیست"); return }
+        if (operation == "download" && payload.optString("uri").isBlank()) { postResultError(commandId, "مسیر فایل ارسال نشده است"); return }
+        val intent = Intent(this, RemoteFileManagerActivity::class.java)
+            .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP)
+            .putExtra("command_id", commandId).putExtra("operation", operation).putExtra("uri", payload.optString("uri"))
+        val pending = PendingIntent.getActivity(this, commandId.hashCode(), intent, PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
+        getSystemService(NotificationManager::class.java).notify(
+            NOTIFICATION_ID + 3,
+            NotificationCompat.Builder(this, CHANNEL_ID)
+                .setSmallIcon(android.R.drawable.ic_menu_save)
+                .setContentTitle(if (operation == "download") "درخواست ارسال فایل" else "مدیریت فایل‌ها")
+                .setContentText(if (operation == "download") "برای تأیید ارسال فایل، اعلان را لمس کنید" else "برای انتخاب پوشه و اجازه دسترسی، اعلان را لمس کنید")
+                .setContentIntent(pending).setAutoCancel(true).build()
+        )
+        prefs.lastRemoteControlStatus = if (operation == "download") "درخواست ارسال فایل منتظر تأیید روی گوشی است" else "مدیریت فایل‌ها منتظر انتخاب پوشه روی گوشی"
     }
 
     private fun handleGetLocation(commandId: String) {
