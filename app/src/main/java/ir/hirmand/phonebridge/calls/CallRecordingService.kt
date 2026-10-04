@@ -37,6 +37,9 @@ class CallRecordingService : Service() {
     override fun onCreate() {
         super.onCreate()
         createNotificationChannel()
+        if (AppPrefs(this).callRecordingEnabled) {
+            runCatching { startMonitoring() }
+        }
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
