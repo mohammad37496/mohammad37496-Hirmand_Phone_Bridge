@@ -229,18 +229,56 @@ class MainActivity : AppCompatActivity() {
             registerDevice()
         }
 
+        binding.retryDeadLettersButton.setOnClickListener {
+            val dead = db.countDeadLetters()
+            if (dead == 0) {
+                binding.statusText.text = "مورد متوقف‌شده‌ای برای تلاش مجدد وجود ندارد"
+                return@setOnClickListener
+            }
+            AlertDialog.Builder(this)
+                .setTitle("تلاش مجدد بسته‌های متوقف‌شده")
+                .setMessage("" + dead + " بستهٔ ناموفق دوباره وارد صف ارسال می‌شوند.")
+                .setNegativeButton("انصراف", null)
+                .setPositiveButton("تلاش مجدد") { _, _ ->
+                    val restored = db.retryDeadLetters()
+                    if (restored > 0) SyncScheduler.enqueue(this)
+                    binding.statusText.text = "" + restored + " بسته دوباره در صف قرار گرفت"
+                    refreshUi()
+                }
+                .show()
+        }
+
         binding.clearQueueButton.setOnClickListener {
-            if (db.count() == 0) {
+            val queued = db.count()
+            if (queued == 0) {
                 binding.statusText.text = "صف محلی خالی است"
                 return@setOnClickListener
             }
             AlertDialog.Builder(this)
                 .setTitle("پاک‌کردن صف محلی")
-                .setMessage("بسته‌هایی که هنوز به سرور ارسال نشده‌اند حذف می‌شوند. ادامه می‌دهی؟")
+                .setMessage("" + queued + " بسته‌ای که هنوز به سرور ارسال نشده‌اند حذف می‌شوند. ادامه می‌دهی؟")
                 .setNegativeButton("انصراف", null)
                 .setPositiveButton("پاک‌کردن") { _, _ ->
                     db.clear()
                     binding.statusText.text = "صف محلی پاک شد"
+                    refreshUi()
+                }
+                .show()
+        }
+
+        binding.clearDeadLettersButton.setOnClickListener {
+            val dead = db.countDeadLetters()
+            if (dead == 0) {
+                binding.statusText.text = "مورد متوقف‌شده‌ای وجود ندارد"
+                return@setOnClickListener
+            }
+            AlertDialog.Builder(this)
+                .setTitle("حذف خطاهای متوقف‌شده")
+                .setMessage("" + dead + " بستهٔ ناموفق برای همیشه از گوشی حذف می‌شوند.")
+                .setNegativeButton("انصراف", null)
+                .setPositiveButton("حذف") { _, _ ->
+                    db.clearDeadLetters()
+                    binding.statusText.text = "خطاهای متوقف‌شده حذف شدند"
                     refreshUi()
                 }
                 .show()
@@ -509,10 +547,12 @@ class MainActivity : AppCompatActivity() {
         }
 
         val queued = db.count()
+        val deadLetters = db.countDeadLetters()
         binding.activeModulesText.text = enabled.toString()
         binding.permissionsReadyText.text = "$permissions / ${selectedPermissions().size}"
         binding.queueMetricText.text = queued.toString()
         binding.queueCountBadge.text = "$queued در صف"
+        binding.deadLetterCountBadge.text = "$deadLetters مورد متوقف‌شده"
         binding.deviceSummaryText.text = prefs.deviceName
         binding.deviceDetailsText.text =
             "${Build.MANUFACTURER} ${Build.MODEL} · Android ${Build.VERSION.RELEASE ?: "نامشخص"} · SDK ${Build.VERSION.SDK_INT}"
@@ -521,8 +561,12 @@ class MainActivity : AppCompatActivity() {
         binding.connectionBadge.text = if (ready) "آماده" else "تنظیم نشده"
 
         binding.lastSyncText.text = when {
+            queued > 0 && deadLetters > 0 ->
+                "${queued} بسته در صف هستند · ${deadLetters} مورد متوقف شده"
             queued > 0 ->
                 "${queued} بسته منتظر ارسال هستند"
+            deadLetters > 0 ->
+                "${deadLetters} بسته به‌دلیل خطای تکراری متوقف شده‌اند"
             prefs.lastSuccessfulSyncAt > 0L ->
                 "آخرین ارسال موفق: " +
                     java.text.DateFormat.getDateTimeInstance(
