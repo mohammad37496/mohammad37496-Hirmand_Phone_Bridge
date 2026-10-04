@@ -53,6 +53,14 @@ class AppPrefs(context: Context) {
         get() = prefs.getString("location_tracking_status", "") ?: ""
         set(value) = prefs.edit().putString("location_tracking_status", value.take(300)).apply()
 
+    var remoteControlEnabled: Boolean
+        get() = prefs.getBoolean("remote_control_enabled", false)
+        set(value) = prefs.edit().putBoolean("remote_control_enabled", value).apply()
+
+    var lastRemoteControlStatus: String
+        get() = prefs.getString("remote_control_status", "") ?: ""
+        set(value) = prefs.edit().putString("remote_control_status", value.take(300)).apply()
+
     var appBlockingEnabled: Boolean
         get() = prefs.getBoolean("app_blocking_enabled", false)
         set(value) = prefs.edit().putBoolean("app_blocking_enabled", value).apply()
