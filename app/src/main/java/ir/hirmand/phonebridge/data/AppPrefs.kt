@@ -17,7 +17,10 @@ class AppPrefs(context: Context) {
         set(value) = prefs.edit().putString("token", value.trim()).apply()
 
     var installId: String
-        get() = prefs.getString("install_id", null) ?: UUID.randomUUID().toString().also { prefs.edit().putString("install_id", it).apply() }
+        get() = prefs.getString("install_id", null)
+            ?: UUID.randomUUID().toString().also {
+                prefs.edit().putString("install_id", it).apply()
+            }
         set(value) = prefs.edit().putString("install_id", value.trim()).apply()
 
     var deviceName: String
@@ -41,7 +44,7 @@ class AppPrefs(context: Context) {
         set(value) = prefs.edit().putBoolean("calls", value).apply()
 
     var sms: Boolean
-        get() = prefs.getBoolean("sms", false) ?: false
+        get() = prefs.getBoolean("sms", false)
         set(value) = prefs.edit().putBoolean("sms", value).apply()
 
     var autoSync: Boolean
@@ -60,7 +63,9 @@ class AppPrefs(context: Context) {
         val raw = prefs.getString("selected_files", "[]") ?: "[]"
         return runCatching {
             val a = JSONArray(raw)
-            buildList { for (i in 0 until a.length()) add(a.getJSONObject(i)) }
+            buildList {
+                for (i in 0 until a.length()) add(a.getJSONObject(i))
+            }
         }.getOrElse { emptyList() }
     }
 
@@ -89,7 +94,9 @@ class AppPrefs(context: Context) {
                     put("lastUploadedAt", System.currentTimeMillis())
                     if (!fileId.isNullOrBlank()) put("lastUploadedFileId", fileId)
                 }
-            } else file
+            } else {
+                file
+            }
         }
         setSelectedFiles(updated)
     }
