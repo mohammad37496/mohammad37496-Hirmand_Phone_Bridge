@@ -64,7 +64,7 @@ class LocationTrackingService : Service() {
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         when (intent?.action) {
-            ACTION_START -> startTracking()
+            ACTION_START -> worker.post { refreshRemoteConfig(); startTracking() }
             ACTION_STOP -> stopTracking(true)
         }
         return START_STICKY
