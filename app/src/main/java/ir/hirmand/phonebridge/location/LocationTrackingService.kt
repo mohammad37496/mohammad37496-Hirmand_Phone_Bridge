@@ -108,12 +108,8 @@ class LocationTrackingService : Service() {
             this,
             Manifest.permission.ACCESS_FINE_LOCATION,
         ) == PackageManager.PERMISSION_GRANTED
-        val coarseGranted = ContextCompat.checkSelfPermission(
-            this,
-            Manifest.permission.ACCESS_COARSE_LOCATION,
-        ) == PackageManager.PERMISSION_GRANTED
-        if (!fineGranted && !coarseGranted) {
-            prefs.lastLocationStatus = "مجوز GPS برای ردیابی موقعیت صادر نشده است"
+        if (!fineGranted) {
+            prefs.lastLocationStatus = "مجوز دقیق GPS برای ردیابی موقعیت صادر نشده است"
             stopTracking(true)
             return
         }
@@ -126,18 +122,14 @@ class LocationTrackingService : Service() {
                 locationListener,
                 Looper.getMainLooper(),
             )
-            if (fineGranted) {
-                locationManager.getLastKnownLocation(LocationManager.GPS_PROVIDER)?.let { location ->
-                    worker.post { uploadOrQueue(location) }
-                }
+            locationManager.getLastKnownLocation(LocationManager.GPS_PROVIDER)?.let { location ->
+                worker.post { uploadOrQueue(location) }
             }
             prefs.lastLocationStatus = "ردیابی موقعیت فعال · هر " + prefs.locationIntervalMinutes + " دقیقه"
         } catch (_: SecurityException) {
             prefs.lastLocationStatus = "مجوز GPS در لحظهٔ دریافت موقعیت در دسترس نبود"
             stopTracking(false)
         }
-            prefs.lastLocationStatus = "دریافت موقعیت GPS از این دستگاه ممکن نشد"
-            stopTracking(false)
         }
     }
 
