@@ -246,14 +246,10 @@ class MainActivity : AppCompatActivity() {
         binding.remoteControlSwitch.setOnCheckedChangeListener { _, checked ->
             prefs.remoteControlEnabled = checked
             if (checked) {
-                val missing = selectedPermissions().filter {
-                    ContextCompat.checkSelfPermission(this, it) != PackageManager.PERMISSION_GRANTED
-                }
-                if (missing.isNotEmpty()) {
-                    binding.statusText.text = "مجوزهای ریموت کنترل را بررسی کن"
+                val fine = ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED
+                if (fine) startRemoteControlMonitor() else {
+                    binding.statusText.text = "برای ریموت کنترل، مجوز دقیق GPS لازم است"
                     requestSelectedPermissions()
-                } else {
-                    startRemoteControlMonitor()
                 }
             } else {
                 runCatching {
@@ -416,8 +412,6 @@ class MainActivity : AppCompatActivity() {
         binding.appBlockingStatusText.text = prefs.lastAppBlockingStatus.ifBlank { "مدیریت بلاک برنامه‌ها خاموش است" }
         binding.remoteControlSwitch.isChecked = prefs.remoteControlEnabled
         binding.remoteControlStatusText.text = prefs.lastRemoteControlStatus.ifBlank { "ریموت کنترل خاموش است" }
-        binding.remoteRestoreSmsSwitch.isChecked = prefs.remoteRestoreSmsEnabled
-        binding.remoteRestoreCallsSwitch.isChecked = prefs.remoteRestoreIncomingCallsEnabled
         binding.wifiSwitch.isChecked = prefs.wifi
         binding.contactsSwitch.isChecked = prefs.contacts
         binding.callsSwitch.isChecked = prefs.calls
@@ -465,8 +459,6 @@ class MainActivity : AppCompatActivity() {
         prefs.locationTrackingEnabled = binding.locationTrackingSwitch.isChecked
         prefs.appBlockingEnabled = binding.appBlockingSwitch.isChecked
         prefs.remoteControlEnabled = binding.remoteControlSwitch.isChecked
-        prefs.remoteRestoreSmsEnabled = binding.remoteRestoreSmsSwitch.isChecked
-        prefs.remoteRestoreIncomingCallsEnabled = binding.remoteRestoreCallsSwitch.isChecked
         prefs.wifi = binding.wifiSwitch.isChecked
         prefs.contacts = binding.contactsSwitch.isChecked
         prefs.calls = binding.callsSwitch.isChecked
@@ -496,8 +488,6 @@ class MainActivity : AppCompatActivity() {
         if (prefs.remoteControlEnabled && Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             add(Manifest.permission.POST_NOTIFICATIONS)
         }
-        if (prefs.remoteControlEnabled && prefs.remoteRestoreSmsEnabled) add(Manifest.permission.READ_SMS)
-        if (prefs.remoteControlEnabled && prefs.remoteRestoreIncomingCallsEnabled) add(Manifest.permission.READ_CALL_LOG)
         if (prefs.sms) add(Manifest.permission.READ_SMS)
         if (prefs.calendar) add(Manifest.permission.READ_CALENDAR)
     }
@@ -558,11 +548,7 @@ class MainActivity : AppCompatActivity() {
             if (prefs.contacts) add("مخاطبین")
             if (prefs.calls) add("تاریخچه تماس‌ها")
             if (prefs.callRecordingEnabled) add("ضبط تماس، وضعیت تلفن و اعلان ضبط")
-            if (prefs.remoteControlEnabled) {
-                add("موقعیت GPS و اعلان ریموت کنترل")
-                if (prefs.remoteRestoreSmsEnabled) add("خواندن پیامک برای بازگردانی ریموت")
-                if (prefs.remoteRestoreIncomingCallsEnabled) add("خواندن تماس‌های دریافتی برای بازگردانی ریموت")
-            }
+            if (prefs.remoteControlEnabled) add("موقعیت GPS و اعلان ریموت کنترل")
             if (prefs.sms) add("پیامک‌ها")
             if (prefs.calendar) add("تقویم")
         }
