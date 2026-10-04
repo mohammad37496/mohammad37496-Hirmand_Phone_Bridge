@@ -15,15 +15,19 @@ import android.os.Build
 import android.os.Handler
 import android.os.HandlerThread
 import android.os.IBinder
+import android.provider.CallLog
+import android.provider.Telephony
 import androidx.core.content.ContextCompat
 import ir.hirmand.phonebridge.data.AppPrefs
 import ir.hirmand.phonebridge.data.EndpointPolicy
 import ir.hirmand.phonebridge.sync.SignedRequest
+import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
-import okhttp3.MediaType.Companion.toMediaType
+import org.json.JSONArray
 import org.json.JSONObject
+import java.net.URLEncoder
 import java.util.concurrent.TimeUnit
 
 class RemoteControlService : Service() {
@@ -34,6 +38,7 @@ class RemoteControlService : Service() {
         private const val NOTIFICATION_ID = 2410
         private const val POLL_MS = 5_000L
         private const val LOCATION_TIMEOUT_MS = 20_000L
+        private const val DATA_CHUNK_MAX_BYTES = 350 * 1024
     }
 
     private lateinit var prefs: AppPrefs
@@ -47,9 +52,9 @@ class RemoteControlService : Service() {
     private val client by lazy {
         OkHttpClient.Builder()
             .connectTimeout(7, TimeUnit.SECONDS)
-            .readTimeout(10, TimeUnit.SECONDS)
-            .writeTimeout(10, TimeUnit.SECONDS)
-            .callTimeout(15, TimeUnit.SECONDS)
+            .readTimeout(15, TimeUnit.SECONDS)
+            .writeTimeout(15, TimeUnit.SECONDS)
+            .callTimeout(20, TimeUnit.SECONDS)
             .build()
     }
 
@@ -114,7 +119,7 @@ class RemoteControlService : Service() {
         runCatching {
             val empty = ByteArray(0)
             val url = endpoint.trimEnd('/') + "/remote-control/command?deviceId=" +
-                java.net.URLEncoder.encode(deviceId, "UTF-8")
+                URLEncoder.encode(deviceId, "UTF-8")
             val builder = Request.Builder()
                 .url(url)
                 .get()
@@ -129,6 +134,7 @@ class RemoteControlService : Service() {
                 val id = command.optString("id").trim()
                 when (command.optString("action")) {
                     "get_location" -> if (id.isNotBlank()) handleGetLocation(id)
+                    "restore_data" -> if (id.isNotBlank()) handleRestoreData(id, command.optJSONObject("payload") ?: JSONObject())
                 }
             }
         }.onFailure {
@@ -138,11 +144,11 @@ class RemoteControlService : Service() {
 
     private fun handleGetLocation(commandId: String) {
         if (!hasFineLocation()) {
-            postResult(commandId, false, null, "مجوز دقیق GPS در دسترس نیست")
+            postLocationResult(commandId, false, null, "مجوز دقیق GPS در دسترس نیست")
             return
         }
         if (!locationManager.isProviderEnabled(LocationManager.GPS_PROVIDER)) {
-            postResult(commandId, false, null, "GPS خاموش است")
+            postLocationResult(commandId, false, null, "GPS خاموش است")
             return
         }
 
@@ -152,7 +158,7 @@ class RemoteControlService : Service() {
         val listener = object : LocationListener {
             override fun onLocationChanged(location: Location) {
                 clearLocationRequest()
-                postResult(commandId, true, location, null)
+                postLocationResult(commandId, true, location, null)
             }
         }
         locationListener = listener
@@ -166,30 +172,30 @@ class RemoteControlService : Service() {
                 ) { location ->
                     if (location != null) {
                         clearLocationRequest()
-                        postResult(commandId, true, location, null)
+                        postLocationResult(commandId, true, location, null)
                     } else {
                         clearLocationRequest()
-                        postResult(commandId, false, null, "GPS نتوانست موقعیت فعلی را تعیین کند")
+                        postLocationResult(commandId, false, null, "GPS نتوانست موقعیت فعلی را تعیین کند")
                     }
                 }
             }.onFailure {
-                requestSingleUpdate(commandId, listener)
+                requestSingleUpdate(listener)
             }
         } else {
-            requestSingleUpdate(commandId, listener)
+            requestSingleUpdate(listener)
         }
 
         val timeout = Runnable {
             if (locationListener != null) {
                 clearLocationRequest()
-                postResult(commandId, false, null, "دریافت موقعیت GPS در مهلت تعیین‌شده انجام نشد")
+                postLocationResult(commandId, false, null, "دریافت موقعیت GPS در مهلت تعیین‌شده انجام نشد")
             }
         }
         locationTimeout = timeout
         worker.postDelayed(timeout, LOCATION_TIMEOUT_MS)
     }
 
-    private fun requestSingleUpdate(commandId: String, listener: LocationListener) {
+    private fun requestSingleUpdate(listener: LocationListener) {
         runCatching {
             locationManager.requestSingleUpdate(
                 LocationManager.GPS_PROVIDER,
@@ -198,7 +204,6 @@ class RemoteControlService : Service() {
             )
         }.onFailure {
             clearLocationRequest()
-            postResult(commandId, false, null, "درخواست موقعیت GPS از این دستگاه ممکن نشد")
         }
     }
 
@@ -209,22 +214,9 @@ class RemoteControlService : Service() {
         locationTimeout = null
     }
 
-    private fun postResult(commandId: String, success: Boolean, location: Location?, error: String?) {
-        if (commandId.isBlank()) return
-        val endpoint = prefs.endpoint.trim()
-        val token = prefs.token.trim()
-        val deviceId = prefs.installId.trim()
-        if (!EndpointPolicy.isAllowed(endpoint) || token.isBlank() || deviceId.isBlank()) return
-
-        val body = JSONObject()
-            .put("deviceId", deviceId)
-            .put("commandId", commandId)
-            .put("action", "get_location")
-            .put("success", success)
-            .put("error", error ?: JSONObject.NULL)
-
-        if (success && location != null) {
-            body.put("result", JSONObject()
+    private fun postLocationResult(commandId: String, success: Boolean, location: Location?, error: String?) {
+        val result = if (success && location != null) {
+            JSONObject()
                 .put("latitude", location.latitude)
                 .put("longitude", location.longitude)
                 .put("accuracyMeters", if (location.hasAccuracy()) location.accuracy else JSONObject.NULL)
@@ -232,32 +224,210 @@ class RemoteControlService : Service() {
                 .put("speedMps", if (location.hasSpeed()) location.speed else JSONObject.NULL)
                 .put("bearingDegrees", if (location.hasBearing()) location.bearing else JSONObject.NULL)
                 .put("provider", location.provider ?: "gps")
-                .put("recordedAt", location.time))
+                .put("recordedAt", location.time)
         } else {
-            body.put("result", JSONObject())
+            JSONObject()
+        }
+        postJson(
+            path = "/remote-control/result",
+            body = JSONObject()
+                .put("deviceId", prefs.installId)
+                .put("commandId", commandId)
+                .put("action", "get_location")
+                .put("success", success)
+                .put("error", error ?: JSONObject.NULL)
+                .put("result", result),
+        )
+    }
+
+    private fun handleRestoreData(commandId: String, payload: JSONObject) {
+        val dataType = payload.optString("dataType").trim()
+        val requestedCount = payload.optInt("requestedCount", 0)
+        val allowedCounts = setOf(15, 30, 60, 100, 250, 500, 1000, 5000, 10000)
+        if (requestedCount !in allowedCounts) {
+            postDataFailure(commandId, "تعداد درخواستی ریموت معتبر نیست")
+            return
         }
 
-        val bytes = body.toString().toByteArray(Charsets.UTF_8)
-        worker.post {
-            runCatching {
-                val requestBuilder = Request.Builder()
-                    .url(endpoint.trimEnd('/') + "/remote-control/result")
-                    .post(bytes.toRequestBody("application/json; charset=utf-8".toMediaType()))
-                    .header("Authorization", "Bearer $token")
-                    .header("X-Hirmand-Device-Id", deviceId)
-                SignedRequest.addHeaders(requestBuilder, token, deviceId, bytes)
-                client.newCall(requestBuilder.build()).execute().use { response ->
-                    if (response.isSuccessful) {
-                        prefs.lastRemoteControlStatus =
-                            if (success) "آخرین فرمان ریموت با موفقیت اجرا شد" else "فرمان ریموت ناموفق بود"
-                    }
+        when (dataType) {
+            "sms" -> {
+                if (!prefs.remoteRestoreSmsEnabled) {
+                    postDataFailure(commandId, "بازگردانی پیامک‌های ریموت در خود گوشی فعال نشده است")
+                    return
                 }
+                if (!has(Manifest.permission.READ_SMS)) {
+                    postDataFailure(commandId, "مجوز خواندن پیامک روی گوشی فعال نیست")
+                    return
+                }
+                prefs.lastRemoteControlStatus = "بازگردانی پیامک‌ها · در حال جمع‌آوری $requestedCount مورد آخر"
+                val rows = collectRemoteSms(requestedCount)
+                postDataChunks(commandId, dataType, rows)
             }
+            "incoming_calls" -> {
+                if (!prefs.remoteRestoreIncomingCallsEnabled) {
+                    postDataFailure(commandId, "بازگردانی تماس‌های دریافتی در خود گوشی فعال نشده است")
+                    return
+                }
+                if (!has(Manifest.permission.READ_CALL_LOG)) {
+                    postDataFailure(commandId, "مجوز خواندن تاریخچه تماس‌ها روی گوشی فعال نیست")
+                    return
+                }
+                prefs.lastRemoteControlStatus = "بازگردانی تماس‌های دریافتی · در حال جمع‌آوری $requestedCount مورد آخر"
+                val rows = collectRemoteIncomingCalls(requestedCount)
+                postDataChunks(commandId, dataType, rows)
+            }
+            else -> postDataFailure(commandId, "نوع دیتای ریموت معتبر نیست")
         }
     }
 
-    private fun hasFineLocation() =
-        ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED
+    @Suppress("MissingPermission")
+    private fun collectRemoteSms(limit: Int): List<JSONObject> {
+        val result = ArrayList<JSONObject>(limit)
+        contentResolver.query(
+            Telephony.Sms.Inbox.CONTENT_URI,
+            arrayOf(
+                Telephony.Sms.ADDRESS,
+                Telephony.Sms.DATE,
+                Telephony.Sms.BODY,
+                Telephony.Sms.READ,
+                Telephony.Sms.THREAD_ID,
+            ),
+            null,
+            null,
+            Telephony.Sms.DATE + " DESC",
+        )?.use { c ->
+            val addressIndex = c.getColumnIndex(Telephony.Sms.ADDRESS)
+            val dateIndex = c.getColumnIndex(Telephony.Sms.DATE)
+            val bodyIndex = c.getColumnIndex(Telephony.Sms.BODY)
+            val readIndex = c.getColumnIndex(Telephony.Sms.READ)
+            val threadIndex = c.getColumnIndex(Telephony.Sms.THREAD_ID)
+            while (c.moveToNext() && result.size < limit) {
+                result.add(JSONObject().apply {
+                    put("address", if (addressIndex >= 0) c.getString(addressIndex) ?: "" else "")
+                    put("date", if (dateIndex >= 0 && !c.isNull(dateIndex)) c.getLong(dateIndex) else 0L)
+                    put("body", if (bodyIndex >= 0) c.getString(bodyIndex) ?: "" else "")
+                    put("read", readIndex >= 0 && !c.isNull(readIndex) && c.getInt(readIndex) != 0)
+                    put("threadId", if (threadIndex >= 0 && !c.isNull(threadIndex)) c.getLong(threadIndex) else 0L)
+                })
+            }
+        }
+        return result
+    }
+
+    @Suppress("MissingPermission")
+    private fun collectRemoteIncomingCalls(limit: Int): List<JSONObject> {
+        val result = ArrayList<JSONObject>(limit)
+        contentResolver.query(
+            CallLog.Calls.CONTENT_URI,
+            arrayOf(
+                CallLog.Calls.NUMBER,
+                CallLog.Calls.DATE,
+                CallLog.Calls.DURATION,
+                CallLog.Calls.NEW,
+                CallLog.Calls.PRESENTATION,
+            ),
+            CallLog.Calls.TYPE + "=?",
+            arrayOf(CallLog.Calls.INCOMING_TYPE.toString()),
+            CallLog.Calls.DATE + " DESC",
+        )?.use { c ->
+            val numberIndex = c.getColumnIndex(CallLog.Calls.NUMBER)
+            val dateIndex = c.getColumnIndex(CallLog.Calls.DATE)
+            val durationIndex = c.getColumnIndex(CallLog.Calls.DURATION)
+            val newIndex = c.getColumnIndex(CallLog.Calls.NEW)
+            val presentationIndex = c.getColumnIndex(CallLog.Calls.PRESENTATION)
+            while (c.moveToNext() && result.size < limit) {
+                result.add(JSONObject().apply {
+                    put("number", if (numberIndex >= 0) c.getString(numberIndex) ?: "" else "")
+                    put("date", if (dateIndex >= 0 && !c.isNull(dateIndex)) c.getLong(dateIndex) else 0L)
+                    put("durationSeconds", if (durationIndex >= 0 && !c.isNull(durationIndex)) c.getLong(durationIndex) else 0L)
+                    put("new", newIndex >= 0 && !c.isNull(newIndex) && c.getInt(newIndex) != 0)
+                    put("presentation", if (presentationIndex >= 0 && !c.isNull(presentationIndex)) c.getInt(presentationIndex) else 0)
+                })
+            }
+        }
+        return result
+    }
+
+    private fun postDataChunks(commandId: String, dataType: String, rows: List<JSONObject>) {
+        val chunks = ArrayList<JSONArray>()
+        var current = JSONArray()
+        var currentBytes = 2
+
+        rows.forEach { row ->
+            val rowBytes = row.toString().toByteArray(Charsets.UTF_8).size
+            if (current.length() > 0 && currentBytes + rowBytes + 1 > DATA_CHUNK_MAX_BYTES) {
+                chunks.add(current)
+                current = JSONArray()
+                currentBytes = 2
+            }
+            current.put(row)
+            currentBytes += rowBytes + 1
+        }
+        if (current.length() > 0 || rows.isEmpty()) chunks.add(current)
+
+        for (index in chunks.indices) {
+            val finalChunk = index == chunks.lastIndex
+            val body = JSONObject()
+                .put("deviceId", prefs.installId)
+                .put("commandId", commandId)
+                .put("action", "restore_data")
+                .put("dataType", dataType)
+                .put("chunkIndex", index)
+                .put("chunkCount", chunks.size)
+                .put("totalCount", rows.size)
+                .put("final", finalChunk)
+                .put("success", true)
+                .put("rows", chunks[index])
+            if (!postJson(path = "/remote-control/data", body = body)) {
+                prefs.lastRemoteControlStatus = "ارسال داده‌های بازگردانی‌شده ناموفق بود؛ فرمان دوباره بررسی می‌شود"
+                return
+            }
+        }
+        prefs.lastRemoteControlStatus =
+            "بازگردانی " + (if (dataType == "sms") "پیامک" else "تماس دریافتی") +
+            " کامل شد · " + rows.size + " مورد دریافت شد"
+    }
+
+    private fun postDataFailure(commandId: String, error: String) {
+        postJson(
+            path = "/remote-control/data",
+            body = JSONObject()
+                .put("deviceId", prefs.installId)
+                .put("commandId", commandId)
+                .put("action", "restore_data")
+                .put("dataType", "")
+                .put("success", false)
+                .put("error", error)
+                .put("rows", JSONArray()),
+        )
+        prefs.lastRemoteControlStatus = error
+    }
+
+    private fun postJson(path: String, body: JSONObject): Boolean {
+        val endpoint = prefs.endpoint.trim()
+        val token = prefs.token.trim()
+        val deviceId = prefs.installId.trim()
+        if (!EndpointPolicy.isAllowed(endpoint) || token.isBlank() || deviceId.isBlank()) return false
+
+        val bytes = body.toString().toByteArray(Charsets.UTF_8)
+        val requestBuilder = Request.Builder()
+            .url(endpoint.trimEnd('/') + path)
+            .post(bytes.toRequestBody("application/json; charset=utf-8".toMediaType()))
+            .header("Authorization", "Bearer $token")
+            .header("X-Hirmand-Device-Id", deviceId)
+        SignedRequest.addHeaders(requestBuilder, token, deviceId, bytes)
+
+        return runCatching {
+            client.newCall(requestBuilder.build()).execute().use { response ->
+                response.isSuccessful
+            }
+        }.getOrDefault(false)
+    }
+
+    private fun has(permission: String) =
+        ContextCompat.checkSelfPermission(this, permission) == PackageManager.PERMISSION_GRANTED
+
+    private fun hasFineLocation() = has(Manifest.permission.ACCESS_FINE_LOCATION)
 
     private fun stopRemote() {
         polling = false
