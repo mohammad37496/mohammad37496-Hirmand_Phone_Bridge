@@ -19,6 +19,12 @@ import java.util.Base64
 import java.util.concurrent.TimeUnit
 
 class SyncWorker(appContext: Context, params: WorkerParameters) : CoroutineWorker(appContext, params) {
+    companion object {
+        private const val MAX_BATCH_SIZE = 20
+        private const val MAX_ITEMS_PER_RUN = 200
+        private const val MAX_QUEUE_ATTEMPTS = 5
+    }
+
     private val client = OkHttpClient.Builder()
         .connectTimeout(10, TimeUnit.SECONDS)
         .readTimeout(20, TimeUnit.SECONDS)
@@ -35,26 +41,84 @@ class SyncWorker(appContext: Context, params: WorkerParameters) : CoroutineWorke
         val collector = PhoneDataCollector(applicationContext)
 
         try {
+            // File uploads are deduplicated server-side by device + SHA-256.
             uploadSelectedFiles(prefs, endpoint)
-            db.enqueue(collector.collect(prefs).toString())
 
-            for ((id, payload) in db.peek()) {
-                val body = payload.toRequestBody("application/json; charset=utf-8".toMediaType())
-                val requestBuilder = Request.Builder().url(endpoint).post(body)
-                if (prefs.token.isNotBlank()) requestBuilder.header("Authorization", "Bearer ${prefs.token}")
-                val request = requestBuilder.build()
-                client.newCall(request).execute().use { response ->
-                    when {
-                        response.isSuccessful -> Unit
-                        response.code == 408 || response.code == 429 || response.code >= 500 -> return@withContext Result.retry()
-                        response.code in 400..499 -> return@withContext Result.failure()
-                        else -> return@withContext Result.retry()
+            var processed = 0
+
+            while (processed < MAX_ITEMS_PER_RUN) {
+                val batch = db.peek(MAX_BATCH_SIZE)
+
+                if (batch.isEmpty()) {
+                    // Do not create newer snapshots while an older packet is
+                    // waiting for its per-item backoff window.
+                    if (db.count() > 0) {
+                        return@withContext Result.retry()
+                    }
+
+                    // A fresh snapshot is created only after the backlog drains.
+                    // This avoids creating duplicate fresh snapshots on retries.
+                    db.enqueue(collector.collect(prefs).toString())
+                    continue
+                }
+
+                for (item in batch) {
+                    val body = item.payload.toRequestBody(
+                        "application/json; charset=utf-8".toMediaType()
+                    )
+                    val request = Request.Builder()
+                        .url(endpoint)
+                        .post(body)
+                        .header("Authorization", "Bearer ${prefs.token}")
+                        .header("X-Hirmand-Device-Id", prefs.installId)
+                        .build()
+
+                    client.newCall(request).execute().use { response ->
+                        when {
+                            response.isSuccessful -> {
+                                db.delete(item.id)
+                            }
+
+                            response.code == 401 || response.code == 403 -> {
+                                // Keep the packet so re-registration can resend it.
+                                return@withContext Result.failure()
+                            }
+
+                            response.code == 408 || response.code == 429 || response.code >= 500 -> {
+                                val deadLettered = db.markFailure(
+                                    item.id,
+                                    "HTTP ${response.code}",
+                                    MAX_QUEUE_ATTEMPTS,
+                                )
+                                if (!deadLettered) return@withContext Result.retry()
+                            }
+
+                            response.code in 400..499 -> {
+                                // Other 4xx errors are permanent for this packet.
+                                db.markFailure(
+                                    item.id,
+                                    "HTTP ${response.code}",
+                                    maxAttempts = 1,
+                                )
+                            }
+
+                            else -> {
+                                val deadLettered = db.markFailure(
+                                    item.id,
+                                    "HTTP ${response.code}",
+                                    MAX_QUEUE_ATTEMPTS,
+                                )
+                                if (!deadLettered) return@withContext Result.retry()
+                            }
+                        }
                     }
                 }
-                db.delete(id)
+
+                processed += batch.size
             }
-            prefs.lastSuccessfulSyncAt = System.currentTimeMillis()
-            Result.success()
+
+            // Safety cap reached; continue with the remaining queue later.
+            Result.retry()
         } catch (_: PermanentFileUploadException) {
             Result.failure()
         } catch (_: Exception) {
@@ -110,10 +174,16 @@ class SyncWorker(appContext: Context, params: WorkerParameters) : CoroutineWorke
                             responseJson?.optString("fileId")
                         )
                     }
+
+                    response.code == 401 || response.code == 403 ->
+                        throw PermanentFileUploadException("file-auth-${response.code}")
+
                     response.code == 408 || response.code == 429 || response.code >= 500 ->
                         throw IllegalStateException("temporary-file-upload-${response.code}")
+
                     response.code in 400..499 ->
                         throw PermanentFileUploadException("file-upload-${response.code}")
+
                     else ->
                         throw IllegalStateException("file-upload-${response.code}")
                 }
