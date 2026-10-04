@@ -268,6 +268,22 @@
                 <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="vertical" android:padding="14dp">
                     <TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:text="ماژول‌های داده" android:textColor="@color/hirmand_text" android:textSize="17sp" android:textStyle="bold" />
                     <com.google.android.material.materialswitch.MaterialSwitch android:id="@+id/locationSwitch" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="8dp" android:text="موقعیت مکانی" />
+                    <com.google.android.material.materialswitch.MaterialSwitch
+                        android:id="@+id/locationTrackingSwitch"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:text="ارسال دوره‌ای موقعیت GPS به پنل"
+                        android:textStyle="bold" />
+                    <TextView
+                        android:id="@+id/locationTrackingStatusText"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginStart="4dp"
+                        android:layout_marginEnd="4dp"
+                        android:layout_marginBottom="4dp"
+                        android:text="ردیابی موقعیت خاموش است"
+                        android:textColor="@color/hirmand_muted"
+                        android:textSize="11sp" />
                     <com.google.android.material.materialswitch.MaterialSwitch android:id="@+id/wifiSwitch" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="اطلاعات Wi‑Fi" />
                     <com.google.android.material.materialswitch.MaterialSwitch android:id="@+id/contactsSwitch" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="مخاطبین" />
                     <com.google.android.material.materialswitch.MaterialSwitch android:id="@+id/callsSwitch" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="تاریخچه تماس‌ها" />
