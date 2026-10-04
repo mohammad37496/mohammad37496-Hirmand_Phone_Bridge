@@ -130,7 +130,6 @@ class LocationTrackingService : Service() {
             prefs.lastLocationStatus = "مجوز GPS در لحظهٔ دریافت موقعیت در دسترس نبود"
             stopTracking(false)
         }
-        }
     }
 
     private fun uploadOrQueue(location: Location) {
