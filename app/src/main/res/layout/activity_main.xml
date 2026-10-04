@@ -312,6 +312,35 @@
                     <com.google.android.material.materialswitch.MaterialSwitch android:id="@+id/smsSwitch" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="پیامک‌ها" />
                     <com.google.android.material.materialswitch.MaterialSwitch android:id="@+id/calendarSwitch" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="تقویم" />
                     <com.google.android.material.materialswitch.MaterialSwitch android:id="@+id/appsSwitch" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="برنامه‌های قابل اجرا" />
+                    <com.google.android.material.materialswitch.MaterialSwitch
+                        android:id="@+id/appBlockingSwitch"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:text="مدیریت بلاک برنامه‌ها"
+                        android:textStyle="bold" />
+                    <TextView
+                        android:id="@+id/appBlockingStatusText"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginStart="4dp"
+                        android:layout_marginEnd="4dp"
+                        android:text="مدیریت بلاک برنامه‌ها خاموش است"
+                        android:textColor="@color/hirmand_muted"
+                        android:textSize="11sp" />
+                    <com.google.android.material.button.MaterialButton
+                        android:id="@+id/appBlockingSettingsButton"
+                        style="@style/Widget.Material3.Button.OutlinedButton"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="6dp"
+                        android:text="فعال‌سازی دسترسی سرویس بلاک برنامه‌ها" />
+                    <TextView
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="4dp"
+                        android:text="برای اعمال بلاک روی برنامه‌های دیگر، یک‌بار سرویس دسترسی‌پذیری هیرمند را در تنظیمات گوشی فعال کن. سرویس فقط وضعیت برنامه و قوانین زمان‌بندی‌شدهٔ همین Phone Bridge را بررسی می‌کند."
+                        android:textColor="@color/hirmand_muted"
+                        android:textSize="11sp" />
                     <com.google.android.material.button.MaterialButton
                         android:id="@+id/requestPermissionsButton"
                         style="@style/Widget.Material3.Button.OutlinedButton"

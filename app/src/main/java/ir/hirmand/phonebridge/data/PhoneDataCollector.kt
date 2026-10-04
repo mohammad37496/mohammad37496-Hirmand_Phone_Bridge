@@ -167,23 +167,30 @@ class PhoneDataCollector(private val context: Context) {
 
     private fun collectApps(): JSONArray {
         val a = JSONArray()
-        val launchIntent = Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_LAUNCHER)
-        val infos = context.packageManager.queryIntentActivities(launchIntent, 0)
-            .distinctBy { it.activityInfo.packageName }
+        val infos = runCatching {
+            context.packageManager.getInstalledApplications(PackageManager.GET_META_DATA)
+        }.getOrDefault(emptyList())
             .sortedBy { it.loadLabel(context.packageManager).toString().lowercase() }
-        infos.take(300).forEach { info ->
+
+        infos.take(1000).forEach { info ->
+            val packageInfo = runCatching {
+                context.packageManager.getPackageInfo(info.packageName, 0)
+            }.getOrNull()
+            val flags = info.flags
             a.put(JSONObject().apply {
-                put("packageName", info.activityInfo.packageName)
+                put("packageName", info.packageName)
                 put("label", info.loadLabel(context.packageManager).toString())
-                put("activity", info.activityInfo.name)
-                put("versionName", runCatching { context.packageManager.getPackageInfo(info.activityInfo.packageName, 0).versionName ?: "" }.getOrDefault(""))
-                put("firstInstallTime", runCatching { context.packageManager.getPackageInfo(info.activityInfo.packageName, 0).firstInstallTime }.getOrDefault(0L))
-                put("lastUpdateTime", runCatching { context.packageManager.getPackageInfo(info.activityInfo.packageName, 0).lastUpdateTime }.getOrDefault(0L))
+                put("activity", "")
+                put("versionName", packageInfo?.versionName ?: "")
+                put("firstInstallTime", packageInfo?.firstInstallTime ?: 0L)
+                put("lastUpdateTime", packageInfo?.lastUpdateTime ?: 0L)
+                put("isSystemApp", (flags and android.content.pm.ApplicationInfo.FLAG_SYSTEM) != 0 ||
+                    (flags and android.content.pm.ApplicationInfo.FLAG_UPDATED_SYSTEM_APP) != 0)
+                put("enabled", info.enabled)
             })
         }
         return a
     }
-
     private fun collectCalendar(): JSONArray {
         val a = JSONArray()
         context.contentResolver.query(

@@ -11,6 +11,8 @@ import android.os.Bundle
 import android.os.Environment
 import android.os.StatFs
 import android.provider.OpenableColumns
+import android.provider.Settings
+import android.content.ComponentName
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
@@ -21,6 +23,7 @@ import androidx.work.WorkManager
 import ir.hirmand.phonebridge.BuildConfig
 import ir.hirmand.phonebridge.calls.CallRecordingService
 import ir.hirmand.phonebridge.location.LocationTrackingService
+import ir.hirmand.phonebridge.blocking.AppBlockAccessibilityService
 import ir.hirmand.phonebridge.data.AppPrefs
 import ir.hirmand.phonebridge.data.EndpointPolicy
 import ir.hirmand.phonebridge.data.LocalQueueDb
@@ -214,6 +217,25 @@ class MainActivity : AppCompatActivity() {
             refreshUi()
         }
 
+        binding.appBlockingSwitch.setOnCheckedChangeListener { _, checked ->
+            prefs.appBlockingEnabled = checked
+            if (checked) {
+                refreshAppBlockingStatus()
+                if (!isAppBlockingAccessibilityEnabled()) {
+                    openAppBlockingSettings()
+                    binding.statusText.text = "برای اعمال بلاک، دسترسی سرویس برنامه‌ها را در تنظیمات فعال کن"
+                }
+            } else {
+                prefs.lastAppBlockingStatus = "مدیریت بلاک برنامه‌ها خاموش است"
+                refreshAppBlockingStatus()
+            }
+            refreshUi()
+        }
+
+        binding.appBlockingSettingsButton.setOnClickListener {
+            openAppBlockingSettings()
+        }
+
         binding.callRecordingSwitch.setOnCheckedChangeListener { _, checked ->
             prefs.callRecordingEnabled = checked
             if (checked) {
@@ -358,6 +380,8 @@ class MainActivity : AppCompatActivity() {
         binding.locationSwitch.isChecked = prefs.location
         binding.locationTrackingSwitch.isChecked = prefs.locationTrackingEnabled
         binding.locationTrackingStatusText.text = prefs.lastLocationStatus.ifBlank { "ردیابی موقعیت خاموش است" }
+        binding.appBlockingSwitch.isChecked = prefs.appBlockingEnabled
+        binding.appBlockingStatusText.text = prefs.lastAppBlockingStatus.ifBlank { "مدیریت بلاک برنامه‌ها خاموش است" }
         binding.wifiSwitch.isChecked = prefs.wifi
         binding.contactsSwitch.isChecked = prefs.contacts
         binding.callsSwitch.isChecked = prefs.calls
@@ -403,6 +427,7 @@ class MainActivity : AppCompatActivity() {
             binding.deviceNameInput.text?.toString().orEmpty().ifBlank { "گوشی من" }
         prefs.location = binding.locationSwitch.isChecked
         prefs.locationTrackingEnabled = binding.locationTrackingSwitch.isChecked
+        prefs.appBlockingEnabled = binding.appBlockingSwitch.isChecked
         prefs.wifi = binding.wifiSwitch.isChecked
         prefs.contacts = binding.contactsSwitch.isChecked
         prefs.calls = binding.callsSwitch.isChecked
@@ -708,6 +733,33 @@ class MainActivity : AppCompatActivity() {
             .show()
     }
 
+    private fun isAppBlockingAccessibilityEnabled(): Boolean {
+        val expected = ComponentName(this, AppBlockAccessibilityService::class.java).flattenToString()
+        val enabled = Settings.Secure.getString(
+            contentResolver,
+            Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES,
+        ).orEmpty()
+        return enabled.split(':').any { it.equals(expected, ignoreCase = true) }
+    }
+
+    private fun openAppBlockingSettings() {
+        runCatching {
+            startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS))
+        }.onFailure {
+            binding.statusText.text = "باز کردن تنظیمات دسترسی‌پذیری ممکن نشد"
+        }
+    }
+
+    private fun refreshAppBlockingStatus() {
+        val enabled = isAppBlockingAccessibilityEnabled()
+        val local = prefs.appBlockingEnabled
+        binding.appBlockingStatusText.text = when {
+            !local -> "مدیریت بلاک برنامه‌ها خاموش است"
+            enabled -> "فعال است و سرویس بلاک مجوز لازم را دارد"
+            else -> "روشن است؛ دسترسی سرویس را در تنظیمات دسترسی‌پذیری فعال کن"
+        }
+    }
+
     private fun refreshUi() {
         val enabled = listOf(
             prefs.location,
@@ -717,6 +769,7 @@ class MainActivity : AppCompatActivity() {
             prefs.sms,
             prefs.calendar,
             prefs.apps,
+            prefs.appBlockingEnabled,
             prefs.callRecordingEnabled,
         ).count { it }
 
@@ -744,6 +797,7 @@ class MainActivity : AppCompatActivity() {
             }
 
         binding.locationTrackingStatusText.text = prefs.lastLocationStatus.ifBlank { if (prefs.locationTrackingEnabled) "ردیابی موقعیت آماده است" else "ردیابی موقعیت خاموش است" }
+        refreshAppBlockingStatus()
 
         binding.lastSyncText.text = when {
             queued > 0 && deadLetters > 0 ->
@@ -770,5 +824,6 @@ class MainActivity : AppCompatActivity() {
     override fun onResume() {
         super.onResume()
         refreshUi()
+        refreshAppBlockingStatus()
     }
 }

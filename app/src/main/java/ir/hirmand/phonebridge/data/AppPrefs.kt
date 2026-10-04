@@ -53,6 +53,30 @@ class AppPrefs(context: Context) {
         get() = prefs.getString("location_tracking_status", "") ?: ""
         set(value) = prefs.edit().putString("location_tracking_status", value.take(300)).apply()
 
+    var appBlockingEnabled: Boolean
+        get() = prefs.getBoolean("app_blocking_enabled", false)
+        set(value) = prefs.edit().putBoolean("app_blocking_enabled", value).apply()
+
+    var lastAppBlockingStatus: String
+        get() = prefs.getString("app_blocking_status", "") ?: ""
+        set(value) = prefs.edit().putString("app_blocking_status", value.take(300)).apply()
+
+    fun appBlockRules(): List<JSONObject> {
+        val raw = prefs.getString("app_block_rules", "[]") ?: "[]"
+        return runCatching {
+            val a = JSONArray(raw)
+            buildList {
+                for (i in 0 until a.length()) add(a.getJSONObject(i))
+            }
+        }.getOrElse { emptyList() }
+    }
+
+    fun setAppBlockRules(rules: List<JSONObject>) {
+        val a = JSONArray()
+        rules.take(200).forEach { a.put(JSONObject(it.toString())) }
+        prefs.edit().putString("app_block_rules", a.toString()).apply()
+    }
+
     fun pendingLocations(): List<JSONObject> {
         val raw = prefs.getString("pending_locations", "[]") ?: "[]"
         return runCatching {
