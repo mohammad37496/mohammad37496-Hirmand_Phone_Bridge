@@ -96,7 +96,7 @@ class LocationTrackingService : Service() {
                 val now = System.currentTimeMillis()
                 if (lastSentAt != 0L && now - lastSentAt < activeIntervalMs) return
                 lastSentAt = now
-                uploadOrQueue(location)
+                worker.post { uploadOrQueue(location) }
             }
         }
         listener = locationListener
@@ -109,7 +109,7 @@ class LocationTrackingService : Service() {
                 locationListener,
                 Looper.getMainLooper(),
             )
-            locationManager.getLastKnownLocation(LocationManager.GPS_PROVIDER)?.let { uploadOrQueue(it) }
+            locationManager.getLastKnownLocation(LocationManager.GPS_PROVIDER)?.let { location -> worker.post { uploadOrQueue(location) } }
             prefs.lastLocationStatus = "ردیابی موقعیت فعال · هر " + prefs.locationIntervalMinutes + " دقیقه"
         }.onFailure {
             prefs.lastLocationStatus = "دریافت موقعیت GPS از این دستگاه ممکن نشد"
