@@ -44,6 +44,7 @@ class MainActivity : AppCompatActivity() {
     private lateinit var binding: ActivityMainBinding
     private lateinit var prefs: AppPrefs
     private lateinit var db: LocalQueueDb
+    private lateinit var consentStore: ConsentStore
     private var latestUpdateUrl: String? = null
 
     private val client by lazy {
@@ -147,6 +148,12 @@ class MainActivity : AppCompatActivity() {
         setContentView(binding.root)
         prefs = AppPrefs(this)
         db = LocalQueueDb(this)
+        consentStore = ConsentStore(this)
+        if (!consentStore.isAccepted()) {
+            startActivity(Intent(this, ConsentGateActivity::class.java))
+            finish()
+            return
+        }
         loadState()
         wireUi()
         observeWorkState()
@@ -308,6 +315,10 @@ class MainActivity : AppCompatActivity() {
         }
 
         binding.pickFilesButton.setOnClickListener {
+            if (!consentStore.hasScope(ConsentStore.SELECTED_FILES)) {
+                showConsentRequired("فایل‌های انتخابی")
+                return@setOnClickListener
+            }
             pickFilesLauncher.launch(
                 arrayOf("image/*", "video/*", "audio/*", "application/pdf", "text/*")
             )
@@ -534,7 +545,39 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
+    private fun consentCoversSelectedModules(): Boolean {
+        val missing = buildList {
+            if (prefs.location || prefs.locationTrackingEnabled) {
+                if (!consentStore.hasScope(ConsentStore.LOCATION)) add("موقعیت کاری")
+            }
+            if (prefs.contacts || prefs.calls || prefs.sms || prefs.callRecordingEnabled) {
+                if (!consentStore.hasScope(ConsentStore.CONTACTS_CALLS_SMS)) add("مخاطبین/تماس/پیامک")
+            }
+            if (prefs.calendar && !consentStore.hasScope(ConsentStore.CALENDAR)) add("تقویم")
+            if (prefs.apps && !consentStore.hasScope(ConsentStore.APPS)) add("برنامه‌های دستگاه")
+            if (prefs.callRecordingEnabled && !consentStore.hasScope(ConsentStore.MICROPHONE)) add("میکروفون")
+            if (prefs.remoteControlEnabled && !consentStore.hasScope(ConsentStore.LOCATION)) add("مدیریت مبتنی بر موقعیت")
+        }
+        if (missing.isEmpty()) return true
+        showConsentRequired(missing.joinToString("، "))
+        return false
+    }
+
+    private fun showConsentRequired(scopeLabel: String) {
+        AlertDialog.Builder(this)
+            .setTitle("رضایت این قابلیت ثبت نشده است")
+            .setMessage("برای فعال‌سازی «$scopeLabel» ابتدا باید رضایت مربوط به آن را در صفحهٔ رضایت تأیید کنی.")
+            .setNegativeButton("انصراف", null)
+            .setPositiveButton("باز کردن رضایت‌نامه") { _, _ ->
+                consentStore.revoke()
+                startActivity(Intent(this, ConsentGateActivity::class.java))
+                finish()
+            }
+            .show()
+    }
+
     private fun requestSelectedPermissions() {
+        if (!consentCoversSelectedModules()) return
         val permissions = selectedPermissions().filter {
             ContextCompat.checkSelfPermission(this, it) != PackageManager.PERMISSION_GRANTED
         }
@@ -641,6 +684,10 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun startManualSync() {
+        if (!consentStore.isAccepted()) {
+            showConsentRequired("همگام‌سازی")
+            return
+        }
         if (!EndpointPolicy.isAllowed(prefs.endpoint)) {
             showEndpointHelp()
             return
