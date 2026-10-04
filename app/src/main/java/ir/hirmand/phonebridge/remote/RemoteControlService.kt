@@ -16,6 +16,8 @@ import android.os.Build
 import android.os.Handler
 import android.os.HandlerThread
 import android.os.IBinder
+import android.provider.CallLog
+import android.provider.Telephony
 import androidx.core.app.NotificationCompat
 import androidx.core.content.ContextCompat
 import ir.hirmand.phonebridge.data.AppPrefs
