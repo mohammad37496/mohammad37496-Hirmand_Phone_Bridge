@@ -318,6 +318,28 @@
                         android:layout_height="wrap_content"
                         android:text="مدیریت بلاک برنامه‌ها"
                         android:textStyle="bold" />
+                    <com.google.android.material.materialswitch.MaterialSwitch
+                        android:id="@+id/remoteControlSwitch"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:text="ریموت کنترل"
+                        android:textStyle="bold" />
+                    <TextView
+                        android:id="@+id/remoteControlStatusText"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginStart="4dp"
+                        android:layout_marginEnd="4dp"
+                        android:text="ریموت کنترل خاموش است"
+                        android:textColor="@color/hirmand_muted"
+                        android:textSize="11sp" />
+                    <TextView
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="4dp"
+                        android:text="برای اجرای فرمان‌های ریموت، سرویس قابل‌مشاهدهٔ Phone Bridge روی همین گوشی فعال می‌شود و اعلان آن نمایش داده خواهد شد."
+                        android:textColor="@color/hirmand_muted"
+                        android:textSize="11sp" />
                     <TextView
                         android:id="@+id/appBlockingStatusText"
                         android:layout_width="match_parent"
