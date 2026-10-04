@@ -148,6 +148,12 @@ class MainActivity : AppCompatActivity() {
             SyncScheduler.cancelPeriodic(this)
         }
         refreshUi()
+        val recordingPermissionsReady = selectedPermissions()
+            .filter { it == Manifest.permission.READ_PHONE_STATE || it == Manifest.permission.RECORD_AUDIO || it == Manifest.permission.POST_NOTIFICATIONS }
+            .all { ContextCompat.checkSelfPermission(this, it) == PackageManager.PERMISSION_GRANTED }
+        if (prefs.callRecordingEnabled && recordingPermissionsReady) {
+            startCallRecordingMonitor()
+        }
         checkForUpdate(showNoUpdate = false)
     }
 
