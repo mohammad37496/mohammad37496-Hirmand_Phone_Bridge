@@ -56,9 +56,25 @@ class SyncWorker(appContext: Context, params: WorkerParameters) : CoroutineWorke
                         return@withContext Result.retry()
                     }
 
-                    // A fresh snapshot is created only after the backlog drains.
-                    // This avoids creating duplicate fresh snapshots on retries.
-                    db.enqueue(collector.collect(prefs).toString())
+                    // Delta mode: if no meaningful module data changed since the
+                    // last successful snapshot, send only a tiny heartbeat.
+                    val snapshot = collector.collect(prefs)
+                    val snapshotHash = snapshotHash(snapshot)
+
+                    if (snapshotHash == prefs.lastSnapshotHash) {
+                        when (sendHeartbeat(prefs, endpoint, snapshotHash)) {
+                            HeartbeatResult.SUCCESS -> {
+                                prefs.lastSuccessfulSyncAt = System.currentTimeMillis()
+                                return@withContext Result.success()
+                            }
+                            HeartbeatResult.AUTH_FAILURE -> return@withContext Result.failure()
+                            HeartbeatResult.RETRY -> return@withContext Result.retry()
+                            HeartbeatResult.PERMANENT -> return@withContext Result.failure()
+                        }
+                    }
+
+                    snapshot.put("snapshotHash", snapshotHash)
+                    db.enqueue(snapshot.toString())
                     continue
                 }
 
@@ -76,7 +92,11 @@ class SyncWorker(appContext: Context, params: WorkerParameters) : CoroutineWorke
                     client.newCall(request).execute().use { response ->
                         when {
                             response.isSuccessful -> {
+                                val sentHash = runCatching {
+                                    org.json.JSONObject(item.payload).optString("snapshotHash")
+                                }.getOrDefault("")
                                 db.delete(item.id)
+                                if (sentHash.isNotBlank()) prefs.lastSnapshotHash = sentHash
                             }
 
                             response.code == 401 || response.code == 403 -> {
@@ -123,6 +143,81 @@ class SyncWorker(appContext: Context, params: WorkerParameters) : CoroutineWorke
             Result.failure()
         } catch (_: Exception) {
             Result.retry()
+        }
+    }
+
+    private enum class HeartbeatResult { SUCCESS, AUTH_FAILURE, RETRY, PERMANENT }
+
+    private fun snapshotHash(payload: org.json.JSONObject): String {
+        val copy = org.json.JSONObject(payload.toString()).apply {
+            remove("sentAt")
+            remove("syncId")
+            remove("deviceStats")
+            remove("snapshotHash")
+        }
+        val canonical = canonicalize(copy)
+        return MessageDigest.getInstance("SHA-256")
+            .digest(canonical.toByteArray(Charsets.UTF_8))
+            .joinToString("") { "%02x".format(it.toInt() and 0xff) }
+    }
+
+    private fun canonicalize(value: Any?): String = when (value) {
+        null, org.json.JSONObject.NULL -> "null"
+        is org.json.JSONObject -> {
+            value.keys().asSequence().toList().sorted().joinToString(
+                prefix = "{",
+                postfix = "}",
+                separator = ",",
+            ) { key -> org.json.JSONObject.quote(key) + ":" + canonicalize(value.opt(key)) }
+        }
+        is org.json.JSONArray -> {
+            (0 until value.length()).joinToString(
+                prefix = "[",
+                postfix = "]",
+                separator = ",",
+            ) { index -> canonicalize(value.opt(index)) }
+        }
+        is Number, is Boolean -> value.toString()
+        else -> org.json.JSONObject.quote(value.toString())
+    }
+
+    private fun sendHeartbeat(
+        prefs: AppPrefs,
+        endpoint: String,
+        snapshotHash: String,
+    ): HeartbeatResult {
+        val body = org.json.JSONObject()
+            .put("snapshotHash", snapshotHash)
+            .put(
+                "device",
+                org.json.JSONObject()
+                    .put("id", prefs.installId)
+                    .put("name", prefs.deviceName)
+                    .put("manufacturer", android.os.Build.MANUFACTURER)
+                    .put("model", android.os.Build.MODEL)
+                    .put("androidVersion", android.os.Build.VERSION.RELEASE ?: "unknown")
+                    .put("sdkInt", android.os.Build.VERSION.SDK_INT),
+            )
+
+        val request = Request.Builder()
+            .url(endpoint.trimEnd('/') + "/heartbeat")
+            .post(body.toString().toRequestBody("application/json; charset=utf-8".toMediaType()))
+            .header("Authorization", "Bearer ${prefs.token}")
+            .header("X-Hirmand-Device-Id", prefs.installId)
+            .build()
+
+        return try {
+            client.newCall(request).execute().use { response ->
+                when {
+                    response.isSuccessful -> HeartbeatResult.SUCCESS
+                    response.code == 401 || response.code == 403 -> HeartbeatResult.AUTH_FAILURE
+                    response.code == 408 || response.code == 429 || response.code >= 500 -> HeartbeatResult.RETRY
+                    response.code in 400..499 -> HeartbeatResult.PERMANENT
+                    else -> HeartbeatResult.RETRY
+                }
+            }
+        } catch (_: Exception) {
+            HeartbeatResult.RETRY
         }
     }
 
