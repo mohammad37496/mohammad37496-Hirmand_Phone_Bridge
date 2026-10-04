@@ -1,0 +1,8 @@
+<resources>
+    <color name="hirmand_background">#F6F1E8</color>
+    <color name="hirmand_surface">#FFFDFC</color>
+    <color name="hirmand_primary">#7A4E2D</color>
+    <color name="hirmand_text">#241E1A</color>
+    <color name="hirmand_muted">#756A61</color>
+    <color name="hirmand_line">#E5DCD2</color>
+</resources>
