@@ -311,8 +311,13 @@ class SyncWorker(appContext: Context, params: WorkerParameters) : CoroutineWorke
                         )
                     }
 
-                    response.code == 401 || response.code == 403 ->
-                        throw PermanentFileUploadException("file-auth-${response.code}")
+                    response.code == 401 ->
+                        throw PermanentFileUploadException("file-auth-401")
+
+                    response.code == 403 -> {
+                        prefs.markSelectedFileBlocked(uri, "server-policy")
+                        Unit
+                    }
 
                     response.code == 408 || response.code == 429 || response.code >= 500 ->
                         throw IllegalStateException("temporary-file-upload-${response.code}")
