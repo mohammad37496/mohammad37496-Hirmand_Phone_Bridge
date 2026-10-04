@@ -50,6 +50,55 @@ class AppPrefs(context: Context) {
         get() = prefs.getBoolean("calls", false)
         set(value) = prefs.edit().putBoolean("calls", value).apply()
 
+    var callRecordingEnabled: Boolean
+        get() = prefs.getBoolean("call_recording_enabled", false)
+        set(value) = prefs.edit().putBoolean("call_recording_enabled", value).apply()
+
+    var lastCallRecordingStatus: String
+        get() = prefs.getString("call_recording_status", "") ?: ""
+        set(value) = prefs.edit().putString("call_recording_status", value.take(300)).apply()
+
+    fun pendingCallRecordings(): List<JSONObject> {
+        val raw = prefs.getString("pending_call_recordings", "[]") ?: "[]"
+        return runCatching {
+            val a = JSONArray(raw)
+            buildList {
+                for (i in 0 until a.length()) add(a.getJSONObject(i))
+            }
+        }.getOrElse { emptyList() }
+    }
+
+    fun addPendingCallRecording(recording: JSONObject) {
+        val items = pendingCallRecordings().toMutableList()
+        items.removeAll { it.optString("path") == recording.optString("path") }
+        items.add(JSONObject(recording.toString()))
+        val a = JSONArray()
+        items.takeLast(50).forEach { a.put(it) }
+        prefs.edit().putString("pending_call_recordings", a.toString()).apply()
+    }
+
+    fun removePendingCallRecording(path: String) {
+        val a = JSONArray()
+        pendingCallRecordings()
+            .filterNot { it.optString("path") == path }
+            .forEach { a.put(it) }
+        prefs.edit().putString("pending_call_recordings", a.toString()).apply()
+    }
+
+    fun updatePendingCallRecording(path: String, update: JSONObject) {
+        val a = JSONArray()
+        pendingCallRecordings().forEach { item ->
+            if (item.optString("path") == path) {
+                val merged = JSONObject(item.toString())
+                update.keys().forEach { key -> merged.put(key, update.opt(key)) }
+                a.put(merged)
+            } else {
+                a.put(item)
+            }
+        }
+        prefs.edit().putString("pending_call_recordings", a.toString()).apply()
+    }
+
     var sms: Boolean
         get() = prefs.getBoolean("sms", false)
         set(value) = prefs.edit().putBoolean("sms", value).apply()
