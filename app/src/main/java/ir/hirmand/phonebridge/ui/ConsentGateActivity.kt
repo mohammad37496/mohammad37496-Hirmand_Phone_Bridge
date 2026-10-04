@@ -82,9 +82,17 @@ class ConsentGateActivity : AppCompatActivity() {
 
         val acceptButton = MaterialButton(this).apply {
             text = "ثبت رضایت و ورود به برنامه"
-            isEnabled = false
+            isEnabled = true
             setOnClickListener {
                 val selected = checks.filterValues { it.isChecked }.keys.toSet()
+                if (ConsentStore.DEVICE_STATUS !in selected) {
+                    MaterialAlertDialogBuilder(this@ConsentGateActivity)
+                        .setTitle("وضعیت دستگاه لازم است")
+                        .setMessage("برای اجرای برنامه، وضعیت پایهٔ دستگاه باید برای مدیریت کاری تأیید شود.")
+                        .setPositiveButton("باشه", null)
+                        .show()
+                    return@setOnClickListener
+                }
                 if (selected.isEmpty()) {
                     MaterialAlertDialogBuilder(this@ConsentGateActivity)
                         .setTitle("انتخاب حوزه لازم است")
@@ -99,9 +107,16 @@ class ConsentGateActivity : AppCompatActivity() {
         }
         root.addView(acceptButton, matchWrap(0, 0))
 
+        checks[ConsentStore.DEVICE_STATUS]?.apply {
+            isChecked = true
+            isEnabled = false
+        }
+
         checks.values.forEach { checkbox ->
             checkbox.setOnCheckedChangeListener { _, _ ->
-                acceptButton.isEnabled = checks.values.any(CheckBox::isChecked)
+                acceptButton.isEnabled = ConsentStore.DEVICE_STATUS in checks
+                    .filterValues { it.isChecked }
+                    .keys
             }
         }
 
