@@ -1,0 +1,495 @@
+package ir.hirmand.phonebridge.ui
+
+import android.Manifest
+import android.app.ActivityManager
+import android.content.Intent
+import android.content.pm.PackageManager
+import android.net.Uri
+import android.os.BatteryManager
+import android.os.Build
+import android.os.Bundle
+import android.os.Environment
+import android.os.StatFs
+import android.provider.OpenableColumns
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.appcompat.app.AlertDialog
+import androidx.appcompat.app.AppCompatActivity
+import androidx.core.content.ContextCompat
+import androidx.lifecycle.lifecycleScope
+import androidx.work.WorkInfo
+import androidx.work.WorkManager
+import ir.hirmand.phonebridge.data.AppPrefs
+import ir.hirmand.phonebridge.data.LocalQueueDb
+import ir.hirmand.phonebridge.databinding.ActivityMainBinding
+import ir.hirmand.phonebridge.sync.SyncScheduler
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import okhttp3.OkHttpClient
+import okhttp3.Request
+import java.net.URI
+import java.util.concurrent.TimeUnit
+
+class MainActivity : AppCompatActivity() {
+    private lateinit var binding: ActivityMainBinding
+    private lateinit var prefs: AppPrefs
+    private lateinit var db: LocalQueueDb
+
+    private val client by lazy {
+        OkHttpClient.Builder()
+            .connectTimeout(7, TimeUnit.SECONDS)
+            .readTimeout(7, TimeUnit.SECONDS)
+            .callTimeout(10, TimeUnit.SECONDS)
+            .build()
+    }
+
+    private val permissionLauncher = registerForActivityResult(
+        ActivityResultContracts.RequestMultiplePermissions()
+    ) {
+        refreshUi()
+        val missing = selectedPermissions().count {
+            ContextCompat.checkSelfPermission(this, it) != PackageManager.PERMISSION_GRANTED
+        }
+        binding.statusText.text =
+            if (missing == 0) "همهٔ مجوزهای انتخاب‌شده آماده‌اند"
+            else "برخی مجوزها هنوز تأیید نشده‌اند"
+    }
+
+    private val pickFilesLauncher = registerForActivityResult(
+        ActivityResultContracts.OpenMultipleDocuments()
+    ) { uris ->
+        if (uris.isNullOrEmpty()) {
+            binding.statusText.text = "فایلی انتخاب نشد"
+            return@registerForActivityResult
+        }
+        uris.take(20).forEach { uri -> saveSelectedFile(uri) }
+        renderSelectedFiles()
+        binding.statusText.text = "${uris.size} مورد برای همگام‌سازی دستی انتخاب شد"
+    }
+
+    private fun saveSelectedFile(uri: Uri) {
+        runCatching {
+            contentResolver.takePersistableUriPermission(
+                uri,
+                Intent.FLAG_GRANT_READ_URI_PERMISSION
+            )
+        }
+
+        val cursor = contentResolver.query(
+            uri,
+            arrayOf(OpenableColumns.DISPLAY_NAME, OpenableColumns.SIZE),
+            null,
+            null,
+            null
+        )
+
+        var name = uri.lastPathSegment ?: "فایل"
+        var size = 0L
+        cursor?.use {
+            if (it.moveToFirst()) {
+                name = it.getString(0) ?: name
+                size = if (!it.isNull(1)) it.getLong(1) else 0L
+            }
+        }
+
+        val mime = contentResolver.getType(uri) ?: "application/octet-stream"
+        prefs.addSelectedFile(org.json.JSONObject().apply {
+            put("uri", uri.toString())
+            put("name", name)
+            put("sizeBytes", size)
+            put("mimeType", mime)
+            put("selectedAt", System.currentTimeMillis())
+        })
+    }
+
+    private fun renderSelectedFiles() {
+        binding.selectedFilesText.text =
+            prefs.selectedFiles().takeLast(8).reversed().joinToString("\n") {
+                val size = it.optLong("sizeBytes", 0L)
+                val status =
+                    if (it.optString("lastUploadedHash").isNotBlank()) "ارسال‌شده"
+                    else "در انتظار ارسال"
+                "• ${it.optString("name", "فایل")} · ${if (size > 0) formatSize(size) else "اندازه نامشخص"} · $status"
+            }.ifBlank { "هنوز فایلی انتخاب نشده است" }
+
+        binding.selectedFilesCountText.text =
+            "${prefs.selectedFiles().size} مورد انتخاب‌شده"
+    }
+
+    private fun formatSize(bytes: Long): String = when {
+        bytes >= 1024L * 1024L ->
+            String.format(java.util.Locale.US, "%.1f MB", bytes / 1024.0 / 1024.0)
+        bytes >= 1024L ->
+            String.format(java.util.Locale.US, "%.0f KB", bytes / 1024.0)
+        else -> "$bytes B"
+    }
+
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        binding = ActivityMainBinding.inflate(layoutInflater)
+        setContentView(binding.root)
+        prefs = AppPrefs(this)
+        db = LocalQueueDb(this)
+        loadState()
+        wireUi()
+        refreshUi()
+    }
+
+    private fun wireUi() {
+        binding.tabGroup.check(binding.tabDashboard.id)
+        binding.tabGroup.addOnButtonCheckedListener { _, checkedId, isChecked ->
+            if (!isChecked) return@addOnButtonCheckedListener
+            when (checkedId) {
+                binding.tabDashboard.id -> showSection(0)
+                binding.tabModules.id -> showSection(1)
+                binding.tabSettings.id -> showSection(2)
+            }
+        }
+
+        val switches = listOf(
+            binding.locationSwitch,
+            binding.wifiSwitch,
+            binding.contactsSwitch,
+            binding.callsSwitch,
+            binding.smsSwitch,
+            binding.calendarSwitch,
+            binding.appsSwitch,
+        )
+        switches.forEach { it.setOnCheckedChangeListener { _, _ -> refreshUi() } }
+
+        binding.autoSyncSwitch.setOnCheckedChangeListener { _, checked ->
+            prefs.autoSync = checked
+            if (checked) {
+                SyncScheduler.schedulePeriodic(this)
+                binding.statusText.text = "همگام‌سازی خودکار فعال شد"
+            } else {
+                SyncScheduler.cancelPeriodic(this)
+                binding.statusText.text = "همگام‌سازی خودکار خاموش شد"
+            }
+        }
+
+        binding.saveButton.setOnClickListener {
+            saveState()
+            binding.statusText.text = "تنظیمات ذخیره شد"
+            refreshUi()
+        }
+
+        binding.requestPermissionsButton.setOnClickListener {
+            saveState()
+            requestSelectedPermissions()
+        }
+
+        binding.syncButton.setOnClickListener {
+            saveState()
+            startManualSync()
+        }
+
+        binding.pickFilesButton.setOnClickListener {
+            pickFilesLauncher.launch(
+                arrayOf("image/*", "video/*", "audio/*", "application/pdf", "text/*")
+            )
+        }
+
+        binding.testConnectionButton.setOnClickListener {
+            saveState()
+            testConnection()
+        }
+
+        binding.clearQueueButton.setOnClickListener {
+            if (db.count() == 0) {
+                binding.statusText.text = "صف محلی خالی است"
+                return@setOnClickListener
+            }
+            AlertDialog.Builder(this)
+                .setTitle("پاک‌کردن صف محلی")
+                .setMessage("بسته‌هایی که هنوز به سرور ارسال نشده‌اند حذف می‌شوند. ادامه می‌دهی؟")
+                .setNegativeButton("انصراف", null)
+                .setPositiveButton("پاک‌کردن") { _, _ ->
+                    db.clear()
+                    binding.statusText.text = "صف محلی پاک شد"
+                    refreshUi()
+                }
+                .show()
+        }
+    }
+
+    private fun showSection(index: Int) {
+        binding.dashboardSection.visibility =
+            if (index == 0) android.view.View.VISIBLE else android.view.View.GONE
+        binding.modulesSection.visibility =
+            if (index == 1) android.view.View.VISIBLE else android.view.View.GONE
+        binding.settingsSection.visibility =
+            if (index == 2) android.view.View.VISIBLE else android.view.View.GONE
+    }
+
+    private fun loadState() {
+        binding.endpointInput.setText(prefs.endpoint)
+        binding.tokenInput.setText(prefs.token)
+        binding.deviceNameInput.setText(prefs.deviceName)
+        binding.locationSwitch.isChecked = prefs.location
+        binding.wifiSwitch.isChecked = prefs.wifi
+        binding.contactsSwitch.isChecked = prefs.contacts
+        binding.callsSwitch.isChecked = prefs.calls
+        binding.smsSwitch.isChecked = prefs.sms
+        binding.calendarSwitch.isChecked = prefs.calendar
+        binding.appsSwitch.isChecked = prefs.apps
+        binding.autoSyncSwitch.isChecked = prefs.autoSync
+        renderSelectedFiles()
+        binding.deviceSummaryText.text = prefs.deviceName
+        binding.deviceDetailsText.text =
+            "${Build.MANUFACTURER} ${Build.MODEL} · Android ${Build.VERSION.RELEASE ?: "نامشخص"} · SDK ${Build.VERSION.SDK_INT}"
+        refreshDeviceStats()
+    }
+
+    private fun refreshDeviceStats() {
+        val batteryIntent =
+            registerReceiver(null, android.content.IntentFilter(Intent.ACTION_BATTERY_CHANGED))
+
+        val batteryLevel = batteryIntent?.let {
+            val level = it.getIntExtra(BatteryManager.EXTRA_LEVEL, -1)
+            val scale = it.getIntExtra(BatteryManager.EXTRA_SCALE, -1)
+            if (level >= 0 && scale > 0) (level * 100 / scale) else null
+        }
+
+        val stat = StatFs(Environment.getDataDirectory().path)
+        val freeGb = stat.availableBytes / 1024.0 / 1024.0 / 1024.0
+        val activityManager = getSystemService(ActivityManager::class.java)
+        val info = ActivityManager.MemoryInfo()
+        activityManager?.getMemoryInfo(info)
+        val ramGb = info.totalMem / 1024.0 / 1024.0 / 1024.0
+
+        binding.batteryText.text = batteryLevel?.let { "$it٪" } ?: "—"
+        binding.ramText.text = String.format(java.util.Locale.US, "%.1f GB", ramGb)
+        binding.storageText.text = String.format(java.util.Locale.US, "%.1f GB", freeGb)
+    }
+
+    private fun saveState() {
+        prefs.endpoint = binding.endpointInput.text?.toString().orEmpty()
+        prefs.token = binding.tokenInput.text?.toString().orEmpty()
+        prefs.deviceName =
+            binding.deviceNameInput.text?.toString().orEmpty().ifBlank { "گوشی من" }
+        prefs.location = binding.locationSwitch.isChecked
+        prefs.wifi = binding.wifiSwitch.isChecked
+        prefs.contacts = binding.contactsSwitch.isChecked
+        prefs.calls = binding.callsSwitch.isChecked
+        prefs.sms = binding.smsSwitch.isChecked
+        prefs.calendar = binding.calendarSwitch.isChecked
+        prefs.apps = binding.appsSwitch.isChecked
+        prefs.autoSync = binding.autoSyncSwitch.isChecked
+    }
+
+    private fun selectedPermissions(): List<String> = buildList {
+        if (prefs.location) add(Manifest.permission.ACCESS_COARSE_LOCATION)
+        if (prefs.contacts) add(Manifest.permission.READ_CONTACTS)
+        if (prefs.calls) add(Manifest.permission.READ_CALL_LOG)
+        if (prefs.sms) add(Manifest.permission.READ_SMS)
+        if (prefs.calendar) add(Manifest.permission.READ_CALENDAR)
+    }
+
+    private fun requestSelectedPermissions() {
+        val permissions = selectedPermissions().filter {
+            ContextCompat.checkSelfPermission(this, it) != PackageManager.PERMISSION_GRANTED
+        }
+
+        if (permissions.isEmpty()) {
+            binding.statusText.text = "مجوزهای انتخاب‌شده از قبل آماده‌اند"
+            return
+        }
+
+        val labels = buildList {
+            if (prefs.location) add("موقعیت")
+            if (prefs.contacts) add("مخاطبین")
+            if (prefs.calls) add("تاریخچه تماس‌ها")
+            if (prefs.sms) add("پیامک‌ها")
+            if (prefs.calendar) add("تقویم")
+        }
+
+        AlertDialog.Builder(this)
+            .setTitle("تأیید دسترسی‌ها")
+            .setMessage(
+                "اپ فقط برای این موارد مجوز می‌خواهد:\n\n" +
+                    "${labels.joinToString("، ")}\n\n" +
+                    "این دسترسی‌ها فقط برای ماژول‌هایی استفاده می‌شوند که خودت روشن کرده‌ای."
+            )
+            .setNegativeButton("انصراف", null)
+            .setPositiveButton("ادامه") { _, _ ->
+                permissionLauncher.launch(permissions.toTypedArray())
+            }
+            .show()
+    }
+
+    private fun startManualSync() {
+        if (!endpointLooksSafe(prefs.endpoint)) {
+            showEndpointHelp()
+            return
+        }
+        if (prefs.token.isBlank()) {
+            binding.statusText.text = "توکن سرور را در تنظیمات وارد کن"
+            binding.tabGroup.check(binding.tabSettings.id)
+            return
+        }
+
+        val missing = selectedPermissions().filter {
+            ContextCompat.checkSelfPermission(this, it) != PackageManager.PERMISSION_GRANTED
+        }
+
+        if (missing.isNotEmpty()) {
+            binding.tabGroup.check(binding.tabModules.id)
+            binding.statusText.text = "ابتدا مجوزهای انتخاب‌شده را تأیید کن"
+            permissionLauncher.launch(missing.toTypedArray())
+            return
+        }
+
+        SyncScheduler.enqueue(this)
+        binding.statusText.text = "درخواست همگام‌سازی ثبت شد؛ در صورت نبود شبکه در صف می‌ماند"
+    }
+
+    private fun testConnection() {
+        val endpoint = prefs.endpoint.trim()
+        if (!endpointLooksSafe(endpoint)) {
+            showEndpointHelp()
+            return
+        }
+        if (prefs.token.isBlank()) {
+            binding.statusText.text = "برای آزمون اتصال، توکن را وارد کن"
+            binding.tabGroup.check(binding.tabSettings.id)
+            return
+        }
+
+        binding.testConnectionButton.isEnabled = false
+        binding.connectionBadge.text = "در حال بررسی"
+
+        lifecycleScope.launch {
+            val result = withContext(Dispatchers.IO) {
+                runCatching {
+                    val healthUrl = endpoint.trimEnd('/')
+                    val request = Request.Builder()
+                        .url(healthUrl)
+                        .header("Authorization", "Bearer ${prefs.token}")
+                        .get()
+                        .build()
+
+                    client.newCall(request).execute().use { response ->
+                        response.isSuccessful to response.code
+                    }
+                }.getOrElse { false to 0 }
+            }
+
+            binding.testConnectionButton.isEnabled = true
+
+            if (result.first) {
+                binding.connectionBadge.text = "متصل"
+                binding.statusText.text =
+                    "اتصال به سرور برقرار است · HTTP ${result.second}"
+            } else {
+                binding.connectionBadge.text = "بدون اتصال"
+                binding.statusText.text =
+                    "سرور در دسترس نیست یا احراز هویت ناموفق است"
+            }
+        }
+    }
+
+    private fun showEndpointHelp() {
+        AlertDialog.Builder(this)
+            .setTitle("آدرس سرور را بررسی کن")
+            .setMessage(
+                "HTTPS برای سرور عمومی مجاز است. برای HTTP فقط از localhost یا یک آدرس خصوصی LAN مثل 192.168.x.x استفاده کن."
+            )
+            .setPositiveButton("متوجه شدم", null)
+            .show()
+    }
+
+    private fun endpointLooksSafe(endpoint: String): Boolean {
+        return try {
+            val uri = URI(endpoint)
+            when (uri.scheme?.lowercase()) {
+                "https" -> true
+                "http" -> isPrivateHost(uri.host?.lowercase())
+                else -> false
+            }
+        } catch (_: Exception) {
+            false
+        }
+    }
+
+    private fun isPrivateHost(host: String?): Boolean {
+        if (host.isNullOrBlank()) return false
+        if (host == "localhost" || host == "127.0.0.1" || host == "10.0.2.2") return true
+        if (host.startsWith("192.168.")) return true
+        if (host.startsWith("10.")) return true
+        if (host.startsWith("172.")) {
+            val second = host.removePrefix("172.").substringBefore('.').toIntOrNull()
+            return second != null && second in 16..31
+        }
+        return false
+    }
+
+    private fun refreshUi() {
+        val enabled = listOf(
+            prefs.location,
+            prefs.wifi,
+            prefs.contacts,
+            prefs.calls,
+            prefs.sms,
+            prefs.calendar,
+            prefs.apps,
+        ).count { it }
+
+        val permissions = selectedPermissions().count {
+            ContextCompat.checkSelfPermission(this, it) == PackageManager.PERMISSION_GRANTED
+        }
+
+        val queued = db.count()
+        binding.activeModulesText.text = enabled.toString()
+        binding.permissionsReadyText.text = "$permissions / ${selectedPermissions().size}"
+        binding.queueMetricText.text = queued.toString()
+        binding.queueCountBadge.text = "$queued در صف"
+        binding.deviceSummaryText.text = prefs.deviceName
+        binding.deviceDetailsText.text =
+            "${Build.MANUFACTURER} ${Build.MODEL} · Android ${Build.VERSION.RELEASE ?: "نامشخص"} · SDK ${Build.VERSION.SDK_INT}"
+
+        val ready = endpointLooksSafe(prefs.endpoint) && prefs.token.isNotBlank()
+        binding.connectionBadge.text = if (ready) "آماده" else "تنظیم نشده"
+
+        binding.lastSyncText.text = when {
+            queued > 0 ->
+                "${queued} بسته منتظر ارسال هستند"
+            prefs.lastSuccessfulSyncAt > 0L ->
+                "آخرین ارسال موفق: " +
+                    java.text.DateFormat.getDateTimeInstance(
+                        java.text.DateFormat.SHORT,
+                        java.text.DateFormat.SHORT,
+                        java.util.Locale("fa", "IR")
+                    ).format(java.util.Date(prefs.lastSuccessfulSyncAt))
+            else ->
+                "هنوز همگام‌سازی انجام نشده است"
+        }
+
+        refreshDeviceStats()
+        binding.autoSyncSwitch.isChecked = prefs.autoSync
+    }
+
+    override fun onResume() {
+        super.onResume()
+        refreshUi()
+
+        WorkManager.getInstance(this)
+            .getWorkInfosForUniqueWorkLiveData("manual-sync")
+            .observe(this) { infos ->
+                val state = infos.firstOrNull()?.state
+                when (state) {
+                    WorkInfo.State.RUNNING ->
+                        binding.statusText.text = "در حال جمع‌آوری و ارسال داده…"
+                    WorkInfo.State.SUCCEEDED -> {
+                        binding.statusText.text = "همگام‌سازی با موفقیت انجام شد"
+                        refreshUi()
+                    }
+                    WorkInfo.State.ENQUEUED ->
+                        binding.statusText.text = "همگام‌سازی در صف اجراست"
+                    WorkInfo.State.FAILED ->
+                        binding.statusText.text = "ارسال انجام نشد؛ داده در صف محلی می‌ماند"
+                    else -> Unit
+                }
+            }
+    }
+}
