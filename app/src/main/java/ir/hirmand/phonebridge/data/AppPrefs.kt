@@ -38,6 +38,46 @@ class AppPrefs(context: Context) {
         get() = prefs.getBoolean("location", false)
         set(value) = prefs.edit().putBoolean("location", value).apply()
 
+    var locationTrackingEnabled: Boolean
+        get() = prefs.getBoolean("location_tracking_enabled", false)
+        set(value) = prefs.edit().putBoolean("location_tracking_enabled", value).apply()
+
+    var locationIntervalMinutes: Int
+        get() = prefs.getInt("location_interval_minutes", 15).coerceIn(5, 15, 30, 60)
+        set(value) {
+            val normalized = if (value in listOf(5, 15, 30, 60)) value else 15
+            prefs.edit().putInt("location_interval_minutes", normalized).apply()
+        }
+
+    var lastLocationStatus: String
+        get() = prefs.getString("location_tracking_status", "") ?: ""
+        set(value) = prefs.edit().putString("location_tracking_status", value.take(300)).apply()
+
+    fun pendingLocations(): List<JSONObject> {
+        val raw = prefs.getString("pending_locations", "[]") ?: "[]"
+        return runCatching {
+            val a = JSONArray(raw)
+            buildList {
+                for (i in 0 until a.length()) add(a.getJSONObject(i))
+            }
+        }.getOrElse { emptyList() }
+    }
+
+    fun addPendingLocation(point: JSONObject) {
+        val items = pendingLocations().toMutableList()
+        items.removeAll { it.optString("clientPointId") == point.optString("clientPointId") }
+        items.add(JSONObject(point.toString()))
+        val a = JSONArray()
+        items.takeLast(1000).forEach { a.put(it) }
+        prefs.edit().putString("pending_locations", a.toString()).apply()
+    }
+
+    fun removePendingLocation(clientPointId: String) {
+        val a = JSONArray()
+        pendingLocations().filterNot { it.optString("clientPointId") == clientPointId }.forEach { a.put(it) }
+        prefs.edit().putString("pending_locations", a.toString()).apply()
+    }
+
     var wifi: Boolean
         get() = prefs.getBoolean("wifi", false)
         set(value) = prefs.edit().putBoolean("wifi", value).apply()
