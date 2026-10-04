@@ -310,7 +310,7 @@ class MainActivity : AppCompatActivity() {
         renderSelectedFiles()
         binding.deviceSummaryText.text = prefs.deviceName
         binding.deviceDetailsText.text =
-            "${Build.MANUFACTURER} ${Build.MODEL} · Android ${Build.VERSION.RELEASE ?: "نامشخص"} · SDK ${Build.VERSION.SDK_INT}"
+            "${Build.MANUFACTURER} ${Build.MODEL} · Android ${Build.VERSION.RELEASE ?: "نامشخص"} · SDK ${Build.VERSION.SDK_INT} · Phone Bridge ${BuildConfig.VERSION_NAME} (${BuildConfig.VERSION_CODE})"
         refreshDeviceStats()
     }
 
