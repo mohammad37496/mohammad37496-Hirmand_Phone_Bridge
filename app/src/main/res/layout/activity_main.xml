@@ -341,32 +341,6 @@
                         android:textColor="@color/hirmand_muted"
                         android:textSize="11sp" />
                     <TextView
-                        android:layout_width="match_parent"
-                        android:layout_height="wrap_content"
-                        android:layout_marginTop="6dp"
-                        android:text="بازگردانی دیتا"
-                        android:textColor="@color/hirmand_text"
-                        android:textSize="14sp"
-                        android:textStyle="bold" />
-                    <com.google.android.material.materialswitch.MaterialSwitch
-                        android:id="@+id/remoteRestoreSmsSwitch"
-                        android:layout_width="match_parent"
-                        android:layout_height="wrap_content"
-                        android:text="اجازه بازگردانی پیامک‌های دریافتی از ریموت" />
-                    <com.google.android.material.materialswitch.MaterialSwitch
-                        android:id="@+id/remoteRestoreCallsSwitch"
-                        android:layout_width="match_parent"
-                        android:layout_height="wrap_content"
-                        android:text="اجازه بازگردانی تماس‌های دریافتی از ریموت" />
-                    <TextView
-                        android:layout_width="match_parent"
-                        android:layout_height="wrap_content"
-                        android:layout_marginStart="4dp"
-                        android:layout_marginEnd="4dp"
-                        android:text="این دو گزینه مستقل از ماژول همگام‌سازی هستند و فقط پس از فعال‌سازی همین مجوزها، فرمان بازگردانی ریموت می‌تواند پیامک یا تماس دریافتی را از این گوشی بخواند."
-                        android:textColor="@color/hirmand_muted"
-                        android:textSize="11sp" />
-                    <TextView
                         android:id="@+id/appBlockingStatusText"
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
