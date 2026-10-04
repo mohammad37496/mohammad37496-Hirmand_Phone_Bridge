@@ -41,7 +41,7 @@ class AppPrefs(context: Context) {
         set(value) = prefs.edit().putBoolean("calls", value).apply()
 
     var sms: Boolean
-        get() = prefs.getBoolean("sms", false)
+        get() = prefs.getBoolean("sms", false) ?: false
         set(value) = prefs.edit().putBoolean("sms", value).apply()
 
     var autoSync: Boolean
@@ -54,9 +54,9 @@ class AppPrefs(context: Context) {
 
     var calendar: Boolean
         get() = prefs.getBoolean("calendar", false)
-        set(value) = prefs.edit().putBoolean("selected_files", value).apply()
+        set(value) = prefs.edit().putBoolean("calendar", value).apply()
 
-    val selectedFiles(): List<JSONObject> {
+    fun selectedFiles(): List<JSONObject> {
         val raw = prefs.getString("selected_files", "[]") ?: "[]"
         return runCatching {
             val a = JSONArray(raw)
@@ -72,7 +72,7 @@ class AppPrefs(context: Context) {
 
     fun addSelectedFile(file: JSONObject) {
         val files = selectedFiles().toMutableList()
-        files.removeAll { it.optString("uri") == file.optString("uri" }
+        files.removeAll { it.optString("uri") == file.optString("uri") }
         files.add(file)
         setSelectedFiles(files.takeLast(20))
     }
@@ -87,7 +87,7 @@ class AppPrefs(context: Context) {
                 JSONObject(file.toString()).apply {
                     put("lastUploadedHash", sha256)
                     put("lastUploadedAt", System.currentTimeMillis())
-                     if (fileId!.isAnd fileId.isNotBlank()) put("lastUploadedFileId", fileId)
+                    if (!fileId.isNullOrBlank()) put("lastUploadedFileId", fileId)
                 }
             } else file
         }
