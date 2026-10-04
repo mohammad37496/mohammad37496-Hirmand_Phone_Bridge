@@ -38,6 +38,7 @@ class MainActivity : AppCompatActivity() {
     private lateinit var binding: ActivityMainBinding
     private lateinit var prefs: AppPrefs
     private lateinit var db: LocalQueueDb
+    private var latestUpdateUrl: String? = null
 
     private val client by lazy {
         OkHttpClient.Builder()
@@ -143,6 +144,7 @@ class MainActivity : AppCompatActivity() {
             SyncScheduler.cancelPeriodic(this)
         }
         refreshUi()
+        checkForUpdate(showNoUpdate = false)
     }
 
     private fun observeWorkState() {
@@ -223,6 +225,20 @@ class MainActivity : AppCompatActivity() {
         binding.testConnectionButton.setOnClickListener {
             saveState()
             testConnection()
+        }
+
+        binding.checkUpdateButton.setOnClickListener {
+            checkForUpdate(showNoUpdate = true)
+        }
+
+        binding.downloadUpdateButton.setOnClickListener {
+            latestUpdateUrl?.let { url ->
+                runCatching {
+                    startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)))
+                }.onFailure {
+                    binding.updateStatusText.text = "باز کردن لینک بروزرسانی ممکن نیست"
+                }
+            }
         }
 
         binding.registerDeviceButton.setOnClickListener {
@@ -389,6 +405,77 @@ class MainActivity : AppCompatActivity() {
                 permissionLauncher.launch(permissions.toTypedArray())
             }
             .show()
+    }
+
+    private fun checkForUpdate(showNoUpdate: Boolean = false) {
+        val endpoint = prefs.endpoint.trim()
+        if (!EndpointPolicy.isAllowed(endpoint)) {
+            if (showNoUpdate) binding.updateStatusText.text = "Endpoint برای بررسی بروزرسانی مجاز نیست"
+            return
+        }
+
+        binding.checkUpdateButton.isEnabled = false
+        if (showNoUpdate) binding.updateStatusText.text = "در حال بررسی نسخهٔ جدید…"
+
+        lifecycleScope.launch {
+            val result = withContext(Dispatchers.IO) {
+                runCatching {
+                    val url = Uri.parse(endpoint.trimEnd('/') + "/update")
+                        .buildUpon()
+                        .appendQueryParameter("versionCode", BuildConfig.VERSION_CODE.toString())
+                        .build()
+                        .toString()
+                    val request = Request.Builder().url(url).get().build()
+                    client.newCall(request).execute().use { response ->
+                        val body = response.body?.string().orEmpty()
+                        if (!response.isSuccessful) throw IllegalStateException("HTTP " + response.code)
+                        JSONObject(body)
+                    }
+                }
+            }
+
+            binding.checkUpdateButton.isEnabled = true
+            result.onSuccess { json ->
+                val available = json.optBoolean("updateAvailable", false)
+                val latest = json.optJSONObject("latest")
+                val latestName = latest?.optString("versionName").orEmpty().ifBlank { "نسخهٔ جدید" }
+                val latestCode = latest?.optInt("versionCode", 0) ?: 0
+                latestUpdateUrl = latest?.optString("downloadUrl").orEmpty().ifBlank { null }
+                val notes = latest?.optString("releaseNotes").orEmpty()
+                val force = latest?.optBoolean("forceUpdate", false) == true && latestUpdateUrl != null
+
+                if (!available || latestCode <= BuildConfig.VERSION_CODE) {
+                    latestUpdateUrl = null
+                    binding.downloadUpdateButton.visibility = android.view.View.GONE
+                    binding.updateStatusText.text =
+                        "نسخهٔ ${BuildConfig.VERSION_NAME} (${BuildConfig.VERSION_CODE}) به‌روز است"
+                    return@onSuccess
+                }
+
+                binding.updateStatusText.text =
+                    "نسخهٔ جدید موجود است: $latestName ($latestCode)" +
+                        if (notes.isNotBlank()) " · $notes" else ""
+                binding.downloadUpdateButton.visibility =
+                    if (latestUpdateUrl != null) android.view.View.VISIBLE else android.view.View.GONE
+
+                if (force) {
+                    AlertDialog.Builder(this@MainActivity)
+                        .setTitle("بروزرسانی ضروری است")
+                        .setMessage("برای ادامهٔ استفاده باید Phone Bridge را به نسخهٔ $latestName ارتقا بدهی.")
+                        .setPositiveButton("دریافت بروزرسانی") { _, _ ->
+                            latestUpdateUrl?.let { startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(it))) }
+                        }
+                        .setCancelable(false)
+                        .show()
+                } else if (showNoUpdate) {
+                    android.widget.Toast.makeText(this@MainActivity, "نسخهٔ جدید آماده است.", android.widget.Toast.LENGTH_SHORT).show()
+                }
+            }.onFailure {
+                if (showNoUpdate) {
+                    binding.updateStatusText.text = "بررسی بروزرسانی انجام نشد؛ اتصال را بررسی کن"
+                }
+            }
+        }
     }
 
     private fun startManualSync() {
