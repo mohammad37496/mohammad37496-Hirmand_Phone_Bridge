@@ -11,8 +11,8 @@ android {
         applicationId = "ir.hirmand.phonebridge"
         minSdk = 26
         targetSdk = 35
-        versionCode = providers.environmentVariable("ANDROID_VERSION_CODE").orNull?.toIntOrNull() ?: 50
-        versionName = providers.environmentVariable("ANDROID_VERSION_NAME").orNull ?: "0.5.0"
+        versionCode = providers.environmentVariable("ANDROID_VERSION_CODE").orNull?.toIntOrNull() ?: 60
+        versionName = providers.environmentVariable("ANDROID_VERSION_NAME").orNull ?: "0.6.0"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
