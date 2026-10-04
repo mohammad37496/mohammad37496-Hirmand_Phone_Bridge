@@ -486,7 +486,7 @@ class RemoteControlService : Service() {
         val result = ArrayList<JSONObject>(limit)
         contentResolver.query(
             CallLog.Calls.CONTENT_URI,
-            arrayOf(CallLog.Calls.NUMBER, CallLog.Calls.DATE, CallLog.Calls.DURATION, CallLog.Calls.NEW, CallLog.Calls.PRESENTATION),
+            arrayOf(CallLog.Calls.NUMBER, CallLog.Calls.DATE, CallLog.Calls.DURATION, CallLog.Calls.NEW, CallLog.Calls.NUMBER_PRESENTATION),
             CallLog.Calls.TYPE + "=?",
             arrayOf(CallLog.Calls.INCOMING_TYPE.toString()),
             CallLog.Calls.DATE + " DESC",
@@ -495,7 +495,7 @@ class RemoteControlService : Service() {
             val date = c.getColumnIndex(CallLog.Calls.DATE)
             val duration = c.getColumnIndex(CallLog.Calls.DURATION)
             val newFlag = c.getColumnIndex(CallLog.Calls.NEW)
-            val presentation = c.getColumnIndex(CallLog.Calls.PRESENTATION)
+            val presentation = c.getColumnIndex(CallLog.Calls.NUMBER_PRESENTATION)
             while (c.moveToNext() && result.size < limit) {
                 result.add(JSONObject()
                     .put("number", if (number >= 0) c.getString(number) ?: "" else "")
