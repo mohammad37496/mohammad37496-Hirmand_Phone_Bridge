@@ -356,6 +356,13 @@ class RemoteControlService : Service() {
         val dataType = prefs.pendingRemoteDataType
         val count = prefs.pendingRemoteDataCount
         if (commandId.isBlank() || count <= 0) return
+        if (!prefs.remoteControlEnabled) {
+            if (commandId.isNotBlank()) {
+                postDataFailure(commandId, prefs.pendingRemoteDataType, "ریموت کنترل در این گوشی خاموش شده است")
+            }
+            prefs.clearPendingRemoteData()
+            return
+        }
         if (dataType == "sms" && !has(Manifest.permission.READ_SMS)) {
             postDataFailure(commandId, dataType, "مجوز پیامک روی گوشی فعال نیست")
             prefs.clearPendingRemoteData()
