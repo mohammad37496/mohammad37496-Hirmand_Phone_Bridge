@@ -19,6 +19,7 @@ import androidx.lifecycle.lifecycleScope
 import androidx.work.WorkInfo
 import androidx.work.WorkManager
 import ir.hirmand.phonebridge.data.AppPrefs
+import ir.hirmand.phonebridge.data.EndpointPolicy
 import ir.hirmand.phonebridge.data.LocalQueueDb
 import ir.hirmand.phonebridge.databinding.ActivityMainBinding
 import ir.hirmand.phonebridge.sync.SyncScheduler
@@ -27,7 +28,6 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import okhttp3.OkHttpClient
 import okhttp3.Request
-import java.net.URI
 import java.util.concurrent.TimeUnit
 
 class MainActivity : AppCompatActivity() {
@@ -64,7 +64,7 @@ class MainActivity : AppCompatActivity() {
         }
         uris.take(20).forEach { uri -> saveSelectedFile(uri) }
         renderSelectedFiles()
-        binding.statusText.text = "${uris.size} مورد برای همگام‌سازی دستی انتخاب شد"
+        binding.statusText.text = "${uris.take(20).size} مورد برای همگام‌سازی دستی انتخاب شد"
     }
 
     private fun saveSelectedFile(uri: Uri) {
@@ -132,7 +132,33 @@ class MainActivity : AppCompatActivity() {
         db = LocalQueueDb(this)
         loadState()
         wireUi()
+        observeWorkState()
+        if (prefs.autoSync) {
+            SyncScheduler.schedulePeriodic(this)
+        } else {
+            SyncScheduler.cancelPeriodic(this)
+        }
         refreshUi()
+    }
+
+    private fun observeWorkState() {
+        WorkManager.getInstance(this)
+            .getWorkInfosForUniqueWorkLiveData("manual-sync")
+            .observe(this) { infos ->
+                when (infos.firstOrNull()?.state) {
+                    WorkInfo.State.RUNNING ->
+                        binding.statusText.text = "در حال جمع‌آوری و ارسال داده…"
+                    WorkInfo.State.SUCCEEDED -> {
+                        binding.statusText.text = "همگام‌سازی با موفقیت انجام شد"
+                        refreshUi()
+                    }
+                    WorkInfo.State.ENQUEUED ->
+                        binding.statusText.text = "همگام‌سازی در صف اجراست"
+                    WorkInfo.State.FAILED ->
+                        binding.statusText.text = "ارسال انجام نشد؛ تنظیمات یا اتصال را بررسی کن"
+                    else -> Unit
+                }
+            }
     }
 
     private fun wireUi() {
@@ -319,7 +345,7 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun startManualSync() {
-        if (!endpointLooksSafe(prefs.endpoint)) {
+        if (!EndpointPolicy.isAllowed(prefs.endpoint)) {
             showEndpointHelp()
             return
         }
@@ -346,7 +372,7 @@ class MainActivity : AppCompatActivity() {
 
     private fun testConnection() {
         val endpoint = prefs.endpoint.trim()
-        if (!endpointLooksSafe(endpoint)) {
+        if (!EndpointPolicy.isAllowed(endpoint)) {
             showEndpointHelp()
             return
         }
@@ -399,31 +425,6 @@ class MainActivity : AppCompatActivity() {
             .show()
     }
 
-    private fun endpointLooksSafe(endpoint: String): Boolean {
-        return try {
-            val uri = URI(endpoint)
-            when (uri.scheme?.lowercase()) {
-                "https" -> true
-                "http" -> isPrivateHost(uri.host?.lowercase())
-                else -> false
-            }
-        } catch (_: Exception) {
-            false
-        }
-    }
-
-    private fun isPrivateHost(host: String?): Boolean {
-        if (host.isNullOrBlank()) return false
-        if (host == "localhost" || host == "127.0.0.1" || host == "10.0.2.2") return true
-        if (host.startsWith("192.168.")) return true
-        if (host.startsWith("10.")) return true
-        if (host.startsWith("172.")) {
-            val second = host.removePrefix("172.").substringBefore('.').toIntOrNull()
-            return second != null && second in 16..31
-        }
-        return false
-    }
-
     private fun refreshUi() {
         val enabled = listOf(
             prefs.location,
@@ -448,7 +449,7 @@ class MainActivity : AppCompatActivity() {
         binding.deviceDetailsText.text =
             "${Build.MANUFACTURER} ${Build.MODEL} · Android ${Build.VERSION.RELEASE ?: "نامشخص"} · SDK ${Build.VERSION.SDK_INT}"
 
-        val ready = endpointLooksSafe(prefs.endpoint) && prefs.token.isNotBlank()
+        val ready = EndpointPolicy.isAllowed(prefs.endpoint) && prefs.token.isNotBlank()
         binding.connectionBadge.text = if (ready) "آماده" else "تنظیم نشده"
 
         binding.lastSyncText.text = when {
@@ -472,24 +473,5 @@ class MainActivity : AppCompatActivity() {
     override fun onResume() {
         super.onResume()
         refreshUi()
-
-        WorkManager.getInstance(this)
-            .getWorkInfosForUniqueWorkLiveData("manual-sync")
-            .observe(this) { infos ->
-                val state = infos.firstOrNull()?.state
-                when (state) {
-                    WorkInfo.State.RUNNING ->
-                        binding.statusText.text = "در حال جمع‌آوری و ارسال داده…"
-                    WorkInfo.State.SUCCEEDED -> {
-                        binding.statusText.text = "همگام‌سازی با موفقیت انجام شد"
-                        refreshUi()
-                    }
-                    WorkInfo.State.ENQUEUED ->
-                        binding.statusText.text = "همگام‌سازی در صف اجراست"
-                    WorkInfo.State.FAILED ->
-                        binding.statusText.text = "ارسال انجام نشد؛ داده در صف محلی می‌ماند"
-                    else -> Unit
-                }
-            }
     }
 }
