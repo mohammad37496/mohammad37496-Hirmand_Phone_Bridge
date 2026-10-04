@@ -84,8 +84,13 @@ class AppPrefs(context: Context) {
 
     fun addSelectedFile(file: JSONObject) {
         val files = selectedFiles().toMutableList()
+        val fresh = JSONObject(file.toString()).apply {
+            remove("policyBlocked")
+            remove("policyBlockedReason")
+            remove("policyBlockedAt")
+        }
         files.removeAll { it.optString("uri") == file.optString("uri") }
-        files.add(file)
+        files.add(fresh)
         setSelectedFiles(files.takeLast(20))
     }
 
