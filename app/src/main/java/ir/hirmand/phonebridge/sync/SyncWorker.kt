@@ -271,6 +271,7 @@ class SyncWorker(appContext: Context, params: WorkerParameters) : CoroutineWorke
         val maxPerFile = 8L * 1024L * 1024L
 
         for (file in files) {
+            if (file.optBoolean("policyBlocked", false)) continue
             val uri = file.optString("uri").takeIf { it.isNotBlank() } ?: continue
             val declaredSize = file.optLong("sizeBytes", 0L)
             if (declaredSize > maxPerFile) continue
