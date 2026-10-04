@@ -118,7 +118,6 @@ class CallRecordingService : Service() {
             file?.delete()
             prefs.lastCallRecordingStatus = "فایل ضبط تماس ناقص بود و حذف شد"
             current.runCatching { reset() }
-            current.release()
             stopForeground(STOP_FOREGROUND_REMOVE)
             stopSelf()
             return
