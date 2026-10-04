@@ -1,0 +1,8 @@
+{
+  "name": "hirmand-phone-bridge-server",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "start": "node device-sync.mjs"
+  }
+}
