@@ -2,6 +2,7 @@ package ir.hirmand.phonebridge
 
 import androidx.test.core.app.ActivityScenario
 import androidx.test.espresso.Espresso.onView
+import androidx.test.espresso.assertion.ViewAssertions.matches
 import androidx.test.espresso.action.ViewActions.click
 import androidx.test.espresso.matcher.ViewMatchers.isDisplayed
 import androidx.test.espresso.matcher.ViewMatchers.withId
@@ -16,33 +17,23 @@ class MainActivityTest {
     @Test
     fun dashboardLoadsAndTabsSwitchSections() {
         ActivityScenario.launch(MainActivity::class.java).use {
-            onView(withId(R.id.dashboardSection)).check { view, _ ->
-                check(view.isDisplayed)
-            }
+            onView(withId(R.id.dashboardSection)).check(matches(isDisplayed()))
 
             onView(withId(R.id.tabModules)).perform(click())
-            onView(withId(R.id.modulesSection)).check { view, _ ->
-                check(view.isDisplayed)
-            }
+            onView(withId(R.id.modulesSection)).check(matches(isDisplayed()))
 
             onView(withId(R.id.tabSettings)).perform(click())
-            onView(withId(R.id.settingsSection)).check { view, _ ->
-                check(view.isDisplayed)
-            }
+            onView(withId(R.id.settingsSection)).check(matches(isDisplayed()))
 
             onView(withId(R.id.tabDashboard)).perform(click())
-            onView(withId(R.id.syncButton)).check { view, _ ->
-                check(view.isDisplayed)
-            }
+            onView(withId(R.id.syncButton)).check(matches(isDisplayed()))
         }
     }
 
     @Test
     fun privacyTextIsVisible() {
         ActivityScenario.launch(MainActivity::class.java).use {
-            onView(withId(R.id.privacyText)).check { view, _ ->
-                check(view.isDisplayed)
-            }
+            onView(withId(R.id.privacyText)).check(matches(isDisplayed()))
         }
     }
 }
