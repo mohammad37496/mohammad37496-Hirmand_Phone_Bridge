@@ -58,6 +58,10 @@ class AppPrefs(context: Context) {
         get() = prefs.getString("call_recording_status", "") ?: ""
         set(value) = prefs.edit().putString("call_recording_status", value.take(300)).apply()
 
+    var callDirectionHint: String
+        get() = prefs.getString("call_direction_hint", "") ?: ""
+        set(value) = prefs.edit().putString("call_direction_hint", value.take(20)).apply()
+
     fun pendingCallRecordings(): List<JSONObject> {
         val raw = prefs.getString("pending_call_recordings", "[]") ?: "[]"
         return runCatching {
