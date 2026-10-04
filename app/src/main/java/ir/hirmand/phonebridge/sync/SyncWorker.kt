@@ -186,8 +186,16 @@ class SyncWorker(appContext: Context, params: WorkerParameters) : CoroutineWorke
         endpoint: String,
         snapshotHash: String,
     ): HeartbeatResult {
+        val queue = LocalQueueDb(applicationContext)
         val body = org.json.JSONObject()
             .put("snapshotHash", snapshotHash)
+            .put(
+                "queue",
+                org.json.JSONObject()
+                    .put("queued", queue.count())
+                    .put("deadLetters", queue.countDeadLetters())
+                    .put("reportedAt", System.currentTimeMillis())
+            )
             .put(
                 "device",
                 org.json.JSONObject()
