@@ -21,6 +21,7 @@ import kotlinx.coroutines.withContext
 import org.json.JSONArray
 import org.json.JSONObject
 import java.util.UUID
+import ir.hirmand.phonebridge.BuildConfig
 
 class PhoneDataCollector(private val context: Context) {
     private fun has(permission: String) = ContextCompat.checkSelfPermission(context, permission) == PackageManager.PERMISSION_GRANTED
@@ -36,6 +37,8 @@ class PhoneDataCollector(private val context: Context) {
                 put("model", Build.MODEL)
                 put("androidVersion", Build.VERSION.RELEASE ?: "unknown")
                 put("sdkInt", Build.VERSION.SDK_INT)
+                put("appVersionName", BuildConfig.VERSION_NAME)
+                put("appVersionCode", BuildConfig.VERSION_CODE)
                 put("id", prefs.installId)
             })
             put("deviceStats", collectDeviceStats())
