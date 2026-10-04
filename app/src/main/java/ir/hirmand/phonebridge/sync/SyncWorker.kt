@@ -88,15 +88,17 @@ class SyncWorker(appContext: Context, params: WorkerParameters) : CoroutineWorke
                 }
 
                 for (item in batch) {
-                    val body = item.payload.toRequestBody(
+                    val bodyBytes = item.payload.toByteArray(Charsets.UTF_8)
+                    val body = bodyBytes.toRequestBody(
                         "application/json; charset=utf-8".toMediaType()
                     )
-                    val request = Request.Builder()
+                    val requestBuilder = Request.Builder()
                         .url(endpoint)
                         .post(body)
                         .header("Authorization", "Bearer ${prefs.token}")
                         .header("X-Hirmand-Device-Id", prefs.installId)
-                        .build()
+                    SignedRequest.addHeaders(requestBuilder, prefs.token, prefs.installId, bodyBytes)
+                    val request = requestBuilder.build()
 
                     client.newCall(request).execute().use { response ->
                         when {
@@ -245,12 +247,14 @@ class SyncWorker(appContext: Context, params: WorkerParameters) : CoroutineWorke
                     .put("sdkInt", android.os.Build.VERSION.SDK_INT),
             )
 
-        val request = Request.Builder()
+        val bodyBytes = body.toString().toByteArray(Charsets.UTF_8)
+        val requestBuilder = Request.Builder()
             .url(endpoint.trimEnd('/') + "/heartbeat")
-            .post(body.toString().toRequestBody("application/json; charset=utf-8".toMediaType()))
+            .post(bodyBytes.toRequestBody("application/json; charset=utf-8".toMediaType()))
             .header("Authorization", "Bearer ${prefs.token}")
             .header("X-Hirmand-Device-Id", prefs.installId)
-            .build()
+        SignedRequest.addHeaders(requestBuilder, prefs.token, prefs.installId, bodyBytes)
+        val request = requestBuilder.build()
 
         return try {
             client.newCall(request).execute().use { response ->
@@ -302,7 +306,7 @@ class SyncWorker(appContext: Context, params: WorkerParameters) : CoroutineWorke
             val body = bytes.toRequestBody(
                 (file.optString("mimeType", "application/octet-stream")).toMediaType()
             )
-            val request = Request.Builder()
+            val requestBuilder = Request.Builder()
                 .url(uploadEndpoint)
                 .post(body)
                 .header("Authorization", "Bearer ${prefs.token}")
@@ -311,7 +315,8 @@ class SyncWorker(appContext: Context, params: WorkerParameters) : CoroutineWorke
                 .header("X-Hirmand-File-Sha256", sha256)
                 .header("X-Hirmand-File-Size", bytes.size.toString())
                 .header("X-Hirmand-File-Mime", file.optString("mimeType", "application/octet-stream"))
-                .build()
+            SignedRequest.addHeaders(requestBuilder, prefs.token, prefs.installId, bytes)
+            val request = requestBuilder.build()
 
             client.newCall(request).execute().use { response ->
                 when {
