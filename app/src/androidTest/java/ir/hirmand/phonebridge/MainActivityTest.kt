@@ -1,5 +1,6 @@
 package ir.hirmand.phonebridge
 
+import androidx.lifecycle.Lifecycle
 import androidx.test.core.app.ActivityScenario
 import androidx.test.espresso.Espresso.onView
 import androidx.test.espresso.assertion.ViewAssertions.matches
@@ -16,7 +17,8 @@ class MainActivityTest {
 
     @Test
     fun dashboardLoadsAndTabsSwitchSections() {
-        ActivityScenario.launch(MainActivity::class.java).use {
+        ActivityScenario.launch(MainActivity::class.java).use { scenario ->
+            scenario.moveToState(Lifecycle.State.RESUMED)
             onView(withId(R.id.dashboardSection)).check(matches(isDisplayed()))
 
             onView(withId(R.id.tabModules)).perform(click())
@@ -32,7 +34,8 @@ class MainActivityTest {
 
     @Test
     fun privacyTextIsVisible() {
-        ActivityScenario.launch(MainActivity::class.java).use {
+        ActivityScenario.launch(MainActivity::class.java).use { scenario ->
+            scenario.moveToState(Lifecycle.State.RESUMED)
             onView(withId(R.id.privacyText)).check(matches(isDisplayed()))
         }
     }
