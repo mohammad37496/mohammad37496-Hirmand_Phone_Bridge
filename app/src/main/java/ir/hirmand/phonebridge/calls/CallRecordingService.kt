@@ -43,11 +43,8 @@ class CallRecordingService : Service() {
         when (intent?.action) {
             ACTION_ENABLE_MONITOR -> startMonitoring()
             ACTION_START -> startRecording(intent.getStringExtra(EXTRA_DIRECTION) ?: "unknown")
-            ACTION_STOP_RECORDING -> stopRecording()
-            ACTION_DISABLE -> {
-                stopRecording()
-                stopSelf()
-            }
+            ACTION_STOP_RECORDING -> stopRecording(stopService = false)
+            ACTION_DISABLE -> stopRecording(stopService = true)
         }
         return START_STICKY
     }
@@ -125,10 +122,12 @@ class CallRecordingService : Service() {
         }
     }
 
-    private fun stopRecording() {
+    private fun stopRecording(stopService: Boolean) {
         val current = recorder ?: run {
-            stopForeground(STOP_FOREGROUND_REMOVE)
-            stopSelf()
+            if (stopService) {
+                stopForeground(STOP_FOREGROUND_REMOVE)
+                stopSelf()
+            }
             return
         }
         val prefs = AppPrefs(this)
@@ -144,8 +143,10 @@ class CallRecordingService : Service() {
             file?.delete()
             prefs.lastCallRecordingStatus = "فایل ضبط تماس ناقص بود و حذف شد"
             current.runCatching { reset() }
-            stopForeground(STOP_FOREGROUND_REMOVE)
-            stopSelf()
+            if (stopService) {
+                stopForeground(STOP_FOREGROUND_REMOVE)
+                stopSelf()
+            }
             return
         } finally {
             current.release()
@@ -173,8 +174,21 @@ class CallRecordingService : Service() {
                 "تماس ضبط شد · ${size / 1024} KB · در صف ارسال امن به سرور"
             SyncScheduler.enqueue(this)
         }
-        stopForeground(STOP_FOREGROUND_REMOVE)
-        stopSelf()
+        if (stopService) {
+            stopForeground(STOP_FOREGROUND_REMOVE)
+            stopSelf()
+        } else {
+            val notification = buildNotification("ضبط تماس آماده است؛ منتظر شروع تماس")
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                startForeground(
+                    NOTIFICATION_ID,
+                    notification,
+                    ServiceInfo.FOREGROUND_SERVICE_TYPE_MICROPHONE,
+                )
+            } else {
+                startForeground(NOTIFICATION_ID, notification)
+            }
+        }
     }
 
     private fun directionLabel(value: String): String = when (value) {
