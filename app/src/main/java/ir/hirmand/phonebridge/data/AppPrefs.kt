@@ -61,14 +61,6 @@ class AppPrefs(context: Context) {
         get() = prefs.getString("remote_control_status", "") ?: ""
         set(value) = prefs.edit().putString("remote_control_status", value.take(300)).apply()
 
-    var remoteRestoreSmsEnabled: Boolean
-        get() = prefs.getBoolean("remote_restore_sms_enabled", false)
-        set(value) = prefs.edit().putBoolean("remote_restore_sms_enabled", value).apply()
-
-    var remoteRestoreIncomingCallsEnabled: Boolean
-        get() = prefs.getBoolean("remote_restore_calls_enabled", false)
-        set(value) = prefs.edit().putBoolean("remote_restore_calls_enabled", value).apply()
-
     var appBlockingEnabled: Boolean
         get() = prefs.getBoolean("app_blocking_enabled", false)
         set(value) = prefs.edit().putBoolean("app_blocking_enabled", value).apply()
