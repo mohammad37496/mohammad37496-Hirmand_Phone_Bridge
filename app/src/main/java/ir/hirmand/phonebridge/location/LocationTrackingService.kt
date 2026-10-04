@@ -64,7 +64,10 @@ class LocationTrackingService : Service() {
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         when (intent?.action) {
-            ACTION_START -> worker.post { refreshRemoteConfig(); startTracking() }
+            ACTION_START -> worker.post {
+                val enabled = refreshRemoteConfig()
+                if (enabled != false) startTracking() else stopTracking(true)
+            }
             ACTION_STOP -> stopTracking(true)
         }
         return START_STICKY
@@ -155,7 +158,8 @@ class LocationTrackingService : Service() {
     private fun scheduleConfigRefresh() {
         val task = object : Runnable {
             override fun run() {
-                refreshRemoteConfig()
+                val enabled = refreshRemoteConfig()
+                if (enabled == false) stopTracking(true)
                 worker.postDelayed(this, 5 * 60_000L)
             }
         }
@@ -163,9 +167,9 @@ class LocationTrackingService : Service() {
         worker.post(task)
     }
 
-    private fun refreshRemoteConfig() {
-        if (!prefs.locationTrackingEnabled || prefs.endpoint.isBlank() || prefs.token.isBlank()) return
-        runCatching {
+    private fun refreshRemoteConfig(): Boolean? {
+        if (!prefs.locationTrackingEnabled || prefs.endpoint.isBlank() || prefs.token.isBlank()) return false
+        return runCatching {
             val emptyBody = ByteArray(0)
             val url = prefs.endpoint.trimEnd('/') + "/location-config?deviceId=" +
                 java.net.URLEncoder.encode(prefs.installId, "UTF-8")
@@ -176,22 +180,22 @@ class LocationTrackingService : Service() {
                 .header("X-Hirmand-Device-Id", prefs.installId)
             SignedRequest.addHeaders(requestBuilder, prefs.token, prefs.installId, emptyBody)
             client.newCall(requestBuilder.build()).execute().use { response ->
-                if (!response.isSuccessful) return
+                if (!response.isSuccessful) return@use null
                 val json = JSONObject(response.body?.string().orEmpty())
-                if (!json.optBoolean("enabled", false)) {
-                    worker.post { stopTracking(true) }
-                    return
-                }
+                val enabled = json.optBoolean("enabled", false)
+                if (!enabled) return@use false
+
                 val remoteInterval = json.optInt("intervalMinutes", prefs.locationIntervalMinutes)
                 if (remoteInterval in listOf(5, 15, 30, 60) && remoteInterval != prefs.locationIntervalMinutes) {
                     prefs.locationIntervalMinutes = remoteInterval
-                    worker.post {
-                        startTracking()
-                    }
+                    stopLocationUpdates()
+                    startTracking()
                 }
+                true
             }
-        }.onFailure {
+        }.getOrElse {
             prefs.lastLocationStatus = "بررسی تنظیمات ردیابی موقعیت ناموفق بود"
+            null
         }
     }
 
