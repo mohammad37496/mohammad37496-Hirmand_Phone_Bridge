@@ -61,6 +61,31 @@ class AppPrefs(context: Context) {
         get() = prefs.getString("remote_control_status", "") ?: ""
         set(value) = prefs.edit().putString("remote_control_status", value.take(300)).apply()
 
+    var pendingRemoteDataCommandId: String
+        get() = prefs.getString("pending_remote_data_command_id", "") ?: ""
+        set(value) = prefs.edit().putString("pending_remote_data_command_id", value.trim()).apply()
+
+    var pendingRemoteDataType: String
+        get() = prefs.getString("pending_remote_data_type", "") ?: ""
+        set(value) = prefs.edit().putString("pending_remote_data_type", value.trim()).apply()
+
+    var pendingRemoteDataCount: Int
+        get() = prefs.getInt("pending_remote_data_count", 0)
+        set(value) = prefs.edit().putInt("pending_remote_data_count", value).apply()
+
+    var promptedRemoteDataCommandId: String
+        get() = prefs.getString("prompted_remote_data_command_id", "") ?: ""
+        set(value) = prefs.edit().putString("prompted_remote_data_command_id", value.trim()).apply()
+
+    fun clearPendingRemoteData() {
+        prefs.edit()
+            .remove("pending_remote_data_command_id")
+            .remove("pending_remote_data_type")
+            .remove("pending_remote_data_count")
+            .remove("prompted_remote_data_command_id")
+            .apply()
+    }
+
     var appBlockingEnabled: Boolean
         get() = prefs.getBoolean("app_blocking_enabled", false)
         set(value) = prefs.edit().putBoolean("app_blocking_enabled", value).apply()
