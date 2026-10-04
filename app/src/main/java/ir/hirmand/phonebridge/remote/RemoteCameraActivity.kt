@@ -126,6 +126,18 @@ class RemoteCameraActivity : AppCompatActivity() {
         val previewFrame = FrameLayout(this)
         preview = TextureView(this)
         previewFrame.addView(preview, FrameLayout.LayoutParams(-1, -1))
+        preview.surfaceTextureListener = object : TextureView.SurfaceTextureListener {
+            override fun onSurfaceTextureAvailable(surface: android.graphics.SurfaceTexture, width: Int, height: Int) {
+                openSelectedCamera()
+            }
+            override fun onSurfaceTextureSizeChanged(surface: android.graphics.SurfaceTexture, width: Int, height: Int) {
+                cameraId?.let { id ->
+                    runCatching { applyPreviewTransform(cameraManager.getCameraCharacteristics(id)) }
+                }
+            }
+            override fun onSurfaceTextureDestroyed(surface: android.graphics.SurfaceTexture): Boolean = true
+            override fun onSurfaceTextureUpdated(surface: android.graphics.SurfaceTexture) = Unit
+        }
         root.addView(previewFrame, LinearLayout.LayoutParams(-1, 0, 1f))
 
         val controls = LinearLayout(this).apply {
