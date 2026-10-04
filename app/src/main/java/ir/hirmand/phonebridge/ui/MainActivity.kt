@@ -20,6 +20,7 @@ import androidx.work.WorkInfo
 import androidx.work.WorkManager
 import ir.hirmand.phonebridge.BuildConfig
 import ir.hirmand.phonebridge.calls.CallRecordingService
+import ir.hirmand.phonebridge.location.LocationTrackingService
 import ir.hirmand.phonebridge.data.AppPrefs
 import ir.hirmand.phonebridge.data.EndpointPolicy
 import ir.hirmand.phonebridge.data.LocalQueueDb
@@ -199,6 +200,20 @@ class MainActivity : AppCompatActivity() {
         )
         switches.forEach { it.setOnCheckedChangeListener { _, _ -> refreshUi() } }
 
+        binding.locationTrackingSwitch.setOnCheckedChangeListener { _, checked ->
+            prefs.locationTrackingEnabled = checked
+            if (checked) {
+                val fine = ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED
+                val coarse = ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_COARSE_LOCATION) == PackageManager.PERMISSION_GRANTED
+                if (fine || coarse) startLocationTrackingMonitor() else requestSelectedPermissions()
+            } else {
+                runCatching { startService(Intent(this, LocationTrackingService::class.java).setAction(LocationTrackingService.ACTION_STOP)) }
+                prefs.lastLocationStatus = "ردیابی موقعیت خاموش است"
+                binding.locationTrackingStatusText.text = prefs.lastLocationStatus
+            }
+            refreshUi()
+        }
+
         binding.callRecordingSwitch.setOnCheckedChangeListener { _, checked ->
             prefs.callRecordingEnabled = checked
             if (checked) {
@@ -341,6 +356,8 @@ class MainActivity : AppCompatActivity() {
         binding.tokenInput.setText(prefs.token)
         binding.deviceNameInput.setText(prefs.deviceName)
         binding.locationSwitch.isChecked = prefs.location
+        binding.locationTrackingSwitch.isChecked = prefs.locationTrackingEnabled
+        binding.locationTrackingStatusText.text = prefs.lastLocationStatus.ifBlank { "ردیابی موقعیت خاموش است" }
         binding.wifiSwitch.isChecked = prefs.wifi
         binding.contactsSwitch.isChecked = prefs.contacts
         binding.callsSwitch.isChecked = prefs.calls
@@ -385,6 +402,7 @@ class MainActivity : AppCompatActivity() {
         prefs.deviceName =
             binding.deviceNameInput.text?.toString().orEmpty().ifBlank { "گوشی من" }
         prefs.location = binding.locationSwitch.isChecked
+        prefs.locationTrackingEnabled = binding.locationTrackingSwitch.isChecked
         prefs.wifi = binding.wifiSwitch.isChecked
         prefs.contacts = binding.contactsSwitch.isChecked
         prefs.calls = binding.callsSwitch.isChecked
@@ -396,7 +414,10 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun selectedPermissions(): List<String> = buildList {
-        if (prefs.location) add(Manifest.permission.ACCESS_COARSE_LOCATION)
+        if (prefs.location || prefs.locationTrackingEnabled) {
+            add(Manifest.permission.ACCESS_FINE_LOCATION)
+            add(Manifest.permission.ACCESS_COARSE_LOCATION)
+        }
         if (prefs.contacts) add(Manifest.permission.READ_CONTACTS)
         if (prefs.calls) {
             add(Manifest.permission.READ_CALL_LOG)
@@ -410,6 +431,20 @@ class MainActivity : AppCompatActivity() {
         }
         if (prefs.sms) add(Manifest.permission.READ_SMS)
         if (prefs.calendar) add(Manifest.permission.READ_CALENDAR)
+    }
+
+    private fun startLocationTrackingMonitor() {
+        if (!prefs.locationTrackingEnabled) return
+        runCatching {
+            startForegroundService(
+                Intent(this, LocationTrackingService::class.java)
+                    .setAction(LocationTrackingService.ACTION_START)
+            )
+            prefs.lastLocationStatus = "ردیابی موقعیت فعال است"
+        }.onFailure {
+            prefs.lastLocationStatus = "شروع سرویس ردیابی موقعیت ممکن نشد"
+        }
+        binding.locationTrackingStatusText.text = prefs.lastLocationStatus
     }
 
     private fun startCallRecordingMonitor() {
@@ -436,7 +471,7 @@ class MainActivity : AppCompatActivity() {
         }
 
         val labels = buildList {
-            if (prefs.location) add("موقعیت")
+            if (prefs.location || prefs.locationTrackingEnabled) add("موقعیت GPS")
             if (prefs.contacts) add("مخاطبین")
             if (prefs.calls) add("تاریخچه تماس‌ها")
             if (prefs.callRecordingEnabled) add("ضبط تماس، وضعیت تلفن و اعلان ضبط")
@@ -707,6 +742,8 @@ class MainActivity : AppCompatActivity() {
             prefs.lastCallRecordingStatus.ifBlank {
                 if (prefs.callRecordingEnabled) "ضبط تماس آمادهٔ استفاده است" else "ضبط خاموش است"
             }
+
+        binding.locationTrackingStatusText.text = prefs.lastLocationStatus.ifBlank { if (prefs.locationTrackingEnabled) "ردیابی موقعیت آماده است" else "ردیابی موقعیت خاموش است" }
 
         binding.lastSyncText.text = when {
             queued > 0 && deadLetters > 0 ->
