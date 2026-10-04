@@ -740,6 +740,7 @@ class MainActivity : AppCompatActivity() {
                             .put("sdkInt", Build.VERSION.SDK_INT)
                             .put("appVersionName", BuildConfig.VERSION_NAME)
                             .put("appVersionCode", BuildConfig.VERSION_CODE))
+                            .put("consent", consentStore.exportRecord())
 
                     val request = Request.Builder()
                         .url(endpoint.trimEnd('/') + "/register")
