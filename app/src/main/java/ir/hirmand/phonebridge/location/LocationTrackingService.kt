@@ -1,6 +1,5 @@
 package ir.hirmand.phonebridge.location
 
-import android.annotation.SuppressLint
 import android.Manifest
 import android.app.Notification
 import android.app.NotificationChannel
@@ -74,7 +73,6 @@ class LocationTrackingService : Service() {
         return START_STICKY
     }
 
-    @SuppressLint("MissingPermission")
     private fun startTracking() {
         if (!prefs.locationTrackingEnabled) { stopSelf(); return }
         if (!hasLocationPermission()) {
@@ -107,6 +105,20 @@ class LocationTrackingService : Service() {
         listener = locationListener
 
         runCatching {
+            val fineGranted = ContextCompat.checkSelfPermission(
+                this,
+                Manifest.permission.ACCESS_FINE_LOCATION,
+            ) == PackageManager.PERMISSION_GRANTED
+            val coarseGranted = ContextCompat.checkSelfPermission(
+                this,
+                Manifest.permission.ACCESS_COARSE_LOCATION,
+            ) == PackageManager.PERMISSION_GRANTED
+            if (!fineGranted && !coarseGranted) {
+                prefs.lastLocationStatus = "مجوز GPS برای ردیابی موقعیت صادر نشده است"
+                stopTracking(true)
+                return@runCatching
+            }
+
             locationManager.requestLocationUpdates(
                 LocationManager.GPS_PROVIDER,
                 activeIntervalMs,
@@ -114,7 +126,9 @@ class LocationTrackingService : Service() {
                 locationListener,
                 Looper.getMainLooper(),
             )
-            locationManager.getLastKnownLocation(LocationManager.GPS_PROVIDER)?.let { location -> worker.post { uploadOrQueue(location) } }
+            locationManager.getLastKnownLocation(LocationManager.GPS_PROVIDER)?.let { location ->
+                worker.post { uploadOrQueue(location) }
+            }
             prefs.lastLocationStatus = "ردیابی موقعیت فعال · هر " + prefs.locationIntervalMinutes + " دقیقه"
         }.onFailure {
             prefs.lastLocationStatus = "دریافت موقعیت GPS از این دستگاه ممکن نشد"
