@@ -395,6 +395,9 @@ class MainActivity : AppCompatActivity() {
         if (prefs.callRecordingEnabled) {
             add(Manifest.permission.READ_PHONE_STATE)
             add(Manifest.permission.RECORD_AUDIO)
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                add(Manifest.permission.POST_NOTIFICATIONS)
+            }
         }
         if (prefs.sms) add(Manifest.permission.READ_SMS)
         if (prefs.calendar) add(Manifest.permission.READ_CALENDAR)
@@ -414,7 +417,7 @@ class MainActivity : AppCompatActivity() {
             if (prefs.location) add("موقعیت")
             if (prefs.contacts) add("مخاطبین")
             if (prefs.calls) add("تاریخچه تماس‌ها")
-            if (prefs.callRecordingEnabled) add("ضبط تماس و وضعیت تلفن")
+            if (prefs.callRecordingEnabled) add("ضبط تماس، وضعیت تلفن و اعلان ضبط")
             if (prefs.sms) add("پیامک‌ها")
             if (prefs.calendar) add("تقویم")
         }
