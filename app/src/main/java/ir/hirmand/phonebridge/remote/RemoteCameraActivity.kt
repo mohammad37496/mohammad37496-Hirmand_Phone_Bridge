@@ -330,7 +330,8 @@ class RemoteCameraActivity : AppCompatActivity() {
     private fun startPreview() {
         val camera = cameraDevice ?: return
         val session = captureSession ?: return
-        val surface = preview.surface ?: return
+        val texture = preview.surfaceTexture ?: return
+        val surface = Surface(texture)
 
         runCatching {
             val request = camera.createCaptureRequest(CameraDevice.TEMPLATE_PREVIEW).apply {
