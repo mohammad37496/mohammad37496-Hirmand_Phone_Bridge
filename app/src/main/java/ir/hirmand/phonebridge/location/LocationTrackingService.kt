@@ -1,5 +1,6 @@
 package ir.hirmand.phonebridge.location
 
+import android.annotation.SuppressLint
 import android.Manifest
 import android.app.Notification
 import android.app.NotificationChannel
@@ -73,6 +74,7 @@ class LocationTrackingService : Service() {
         return START_STICKY
     }
 
+    @SuppressLint("MissingPermission")
     private fun startTracking() {
         if (!prefs.locationTrackingEnabled) { stopSelf(); return }
         if (!hasLocationPermission()) {
