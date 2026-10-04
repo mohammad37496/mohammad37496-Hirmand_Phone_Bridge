@@ -1,7 +1,11 @@
 package ir.hirmand.phonebridge.sync
 
+import android.app.ActivityManager
 import android.content.Context
 import android.net.Uri
+import android.os.BatteryManager
+import android.os.Environment
+import android.os.StatFs
 import androidx.work.CoroutineWorker
 import androidx.work.WorkerParameters
 import ir.hirmand.phonebridge.data.AppPrefs
@@ -181,6 +185,34 @@ class SyncWorker(appContext: Context, params: WorkerParameters) : CoroutineWorke
         else -> org.json.JSONObject.quote(value.toString())
     }
 
+    private fun collectHeartbeatStats(): org.json.JSONObject {
+        val batteryManager = applicationContext.getSystemService(Context.BATTERY_SERVICE) as? BatteryManager
+        val battery = batteryManager?.getIntProperty(BatteryManager.BATTERY_PROPERTY_CAPACITY)
+            ?.takeIf { it in 0..100 }
+
+        val stat = StatFs(Environment.getDataDirectory().path)
+        val storageAvailable = stat.availableBytes
+        val storageTotal = stat.totalBytes
+
+        val memoryManager = applicationContext.getSystemService(ActivityManager::class.java)
+        val memoryInfo = ActivityManager.MemoryInfo()
+        memoryManager?.getMemoryInfo(memoryInfo)
+
+        val charging = applicationContext.registerReceiver(null, android.content.IntentFilter(android.content.Intent.ACTION_BATTERY_CHANGED))
+            ?.let { status ->
+                val value = status.getIntExtra(BatteryManager.EXTRA_STATUS, -1)
+                value == BatteryManager.BATTERY_STATUS_CHARGING || value == BatteryManager.BATTERY_STATUS_FULL
+            }
+
+        return org.json.JSONObject()
+            .put("batteryPercent", battery ?: org.json.JSONObject.NULL)
+            .put("batteryCharging", charging ?: org.json.JSONObject.NULL)
+            .put("storageAvailableBytes", storageAvailable)
+            .put("storageTotalBytes", storageTotal)
+            .put("ramAvailableBytes", memoryInfo.availMem)
+            .put("ramTotalBytes", memoryInfo.totalMem)
+    }
+
     private fun sendHeartbeat(
         prefs: AppPrefs,
         endpoint: String,
@@ -189,6 +221,7 @@ class SyncWorker(appContext: Context, params: WorkerParameters) : CoroutineWorke
         val queue = LocalQueueDb(applicationContext)
         val body = org.json.JSONObject()
             .put("snapshotHash", snapshotHash)
+            .put("deviceStats", collectHeartbeatStats())
             .put(
                 "queue",
                 org.json.JSONObject()
