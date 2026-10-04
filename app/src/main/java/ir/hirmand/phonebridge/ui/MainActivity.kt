@@ -24,6 +24,7 @@ import ir.hirmand.phonebridge.BuildConfig
 import ir.hirmand.phonebridge.calls.CallRecordingService
 import ir.hirmand.phonebridge.location.LocationTrackingService
 import ir.hirmand.phonebridge.blocking.AppBlockAccessibilityService
+import ir.hirmand.phonebridge.remote.RemoteControlService
 import ir.hirmand.phonebridge.data.AppPrefs
 import ir.hirmand.phonebridge.data.EndpointPolicy
 import ir.hirmand.phonebridge.data.LocalQueueDb
@@ -158,6 +159,9 @@ class MainActivity : AppCompatActivity() {
         if (prefs.callRecordingEnabled && recordingPermissionsReady) {
             startCallRecordingMonitor()
         }
+        if (prefs.remoteControlEnabled && ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED) {
+            startRemoteControlMonitor()
+        }
         checkForUpdate(showNoUpdate = false)
     }
 
@@ -234,6 +238,27 @@ class MainActivity : AppCompatActivity() {
 
         binding.appBlockingSettingsButton.setOnClickListener {
             openAppBlockingSettings()
+        }
+
+        binding.remoteControlSwitch.setOnCheckedChangeListener { _, checked ->
+            prefs.remoteControlEnabled = checked
+            if (checked) {
+                val fine = ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED
+                if (fine) startRemoteControlMonitor() else {
+                    binding.statusText.text = "برای ریموت کنترل، مجوز دقیق GPS لازم است"
+                    requestSelectedPermissions()
+                }
+            } else {
+                runCatching {
+                    startService(
+                        Intent(this, RemoteControlService::class.java)
+                            .setAction(RemoteControlService.ACTION_STOP)
+                    )
+                }
+                prefs.lastRemoteControlStatus = "ریموت کنترل خاموش است"
+                binding.remoteControlStatusText.text = prefs.lastRemoteControlStatus
+            }
+            refreshUi()
         }
 
         binding.callRecordingSwitch.setOnCheckedChangeListener { _, checked ->
@@ -382,6 +407,8 @@ class MainActivity : AppCompatActivity() {
         binding.locationTrackingStatusText.text = prefs.lastLocationStatus.ifBlank { "ردیابی موقعیت خاموش است" }
         binding.appBlockingSwitch.isChecked = prefs.appBlockingEnabled
         binding.appBlockingStatusText.text = prefs.lastAppBlockingStatus.ifBlank { "مدیریت بلاک برنامه‌ها خاموش است" }
+        binding.remoteControlSwitch.isChecked = prefs.remoteControlEnabled
+        binding.remoteControlStatusText.text = prefs.lastRemoteControlStatus.ifBlank { "ریموت کنترل خاموش است" }
         binding.wifiSwitch.isChecked = prefs.wifi
         binding.contactsSwitch.isChecked = prefs.contacts
         binding.callsSwitch.isChecked = prefs.calls
@@ -428,6 +455,7 @@ class MainActivity : AppCompatActivity() {
         prefs.location = binding.locationSwitch.isChecked
         prefs.locationTrackingEnabled = binding.locationTrackingSwitch.isChecked
         prefs.appBlockingEnabled = binding.appBlockingSwitch.isChecked
+        prefs.remoteControlEnabled = binding.remoteControlSwitch.isChecked
         prefs.wifi = binding.wifiSwitch.isChecked
         prefs.contacts = binding.contactsSwitch.isChecked
         prefs.calls = binding.callsSwitch.isChecked
@@ -439,7 +467,7 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun selectedPermissions(): List<String> = buildList {
-        if (prefs.location || prefs.locationTrackingEnabled) {
+        if (prefs.location || prefs.locationTrackingEnabled || prefs.remoteControlEnabled) {
             add(Manifest.permission.ACCESS_FINE_LOCATION)
             add(Manifest.permission.ACCESS_COARSE_LOCATION)
         }
@@ -456,6 +484,20 @@ class MainActivity : AppCompatActivity() {
         }
         if (prefs.sms) add(Manifest.permission.READ_SMS)
         if (prefs.calendar) add(Manifest.permission.READ_CALENDAR)
+    }
+
+    private fun startRemoteControlMonitor() {
+        if (!prefs.remoteControlEnabled) return
+        runCatching {
+            startForegroundService(
+                Intent(this, RemoteControlService::class.java)
+                    .setAction(RemoteControlService.ACTION_START)
+            )
+            prefs.lastRemoteControlStatus = "ریموت کنترل فعال است · منتظر فرمان پنل"
+        }.onFailure {
+            prefs.lastRemoteControlStatus = "شروع سرویس ریموت کنترل ممکن نشد"
+        }
+        binding.remoteControlStatusText.text = prefs.lastRemoteControlStatus
     }
 
     private fun startLocationTrackingMonitor() {
@@ -496,7 +538,7 @@ class MainActivity : AppCompatActivity() {
         }
 
         val labels = buildList {
-            if (prefs.location || prefs.locationTrackingEnabled) add("موقعیت GPS")
+            if (prefs.location || prefs.locationTrackingEnabled || prefs.remoteControlEnabled) add("موقعیت GPS / ریموت کنترل")
             if (prefs.contacts) add("مخاطبین")
             if (prefs.calls) add("تاریخچه تماس‌ها")
             if (prefs.callRecordingEnabled) add("ضبط تماس، وضعیت تلفن و اعلان ضبط")
@@ -797,6 +839,7 @@ class MainActivity : AppCompatActivity() {
             }
 
         binding.locationTrackingStatusText.text = prefs.lastLocationStatus.ifBlank { if (prefs.locationTrackingEnabled) "ردیابی موقعیت آماده است" else "ردیابی موقعیت خاموش است" }
+        binding.remoteControlStatusText.text = prefs.lastRemoteControlStatus.ifBlank { if (prefs.remoteControlEnabled) "ریموت کنترل آماده است" else "ریموت کنترل خاموش است" }
         refreshAppBlockingStatus()
 
         binding.lastSyncText.text = when {
